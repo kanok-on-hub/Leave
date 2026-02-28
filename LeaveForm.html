@@ -120,7 +120,7 @@
 <script>
   // ===== CONFIG =====
   const LIFF_ID = "2008997153-n5oIYKUP";
-  const API_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // BackendApi.gs web app URL
+  const API_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec";
   const DRAFT_PREFIX = "LEAVE_DRAFT:";
   // ==================
 
@@ -133,6 +133,17 @@
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Processing…"; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
+
+  // ✅ KEY FIX: no preflight POST helper
+  async function apiPost(action, payloadObj) {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, // ✅ avoid OPTIONS
+      body: JSON.stringify({ action, ...payloadObj })
+    });
+    const data = await res.json();
+    return data;
+  }
 
   function selectType(btn, val) {
     document.querySelectorAll(".type-btn").forEach(b => b.classList.remove("selected"));
@@ -159,8 +170,8 @@
   async function fetchHolidays() {
     try {
       const res = await fetch(API_URL + "?action=get_holidays&t=" + Date.now());
-      companyHolidays = await res.json();
-      if (!Array.isArray(companyHolidays)) companyHolidays = [];
+      const data = await res.json();
+      companyHolidays = Array.isArray(data) ? data : [];
     } catch(e) { companyHolidays = []; }
   }
 
@@ -212,7 +223,6 @@
   }
 
   function validateOnFly() {
-    const type = $("leaveTypeValue").value;
     const s = $("startDate").value;
     const e = $("endDate").value;
     const badge = $("dayBadge");
@@ -222,12 +232,25 @@
     $("reason").classList.remove("err");
 
     if (!s || !e) { badge.classList.add("hidden"); return true; }
-    if (!Array.isArray(companyHolidays)) { badge.classList.add("hidden"); return true; }
-
     const days = calcWorkingDays(s, e);
     badge.textContent = `Working: ${days} ${(days === 1) ? "Day" : "Days"}`;
     badge.classList.remove("hidden");
     return true;
+  }
+
+  function setTypeUI(typeVal) {
+    const type = String(typeVal || "").trim();
+    if (!type) return;
+    document.querySelectorAll(".type-btn").forEach(b => {
+      // match by onclick value
+      const onclick = b.getAttribute("onclick") || "";
+      if (onclick.includes(`'${type}'`)) b.classList.add("selected");
+      else b.classList.remove("selected");
+    });
+    $("leaveTypeValue").value = type;
+    if (type === "Other") $("otherField").classList.remove("hidden");
+    else $("otherField").classList.add("hidden");
+    updateRemainingUI();
   }
 
   async function loadRequestIfEdit() {
@@ -242,19 +265,9 @@
       const data = await res.json();
       if (data && data.ok && data.request) {
         const r = data.request;
-        // Prefill
-        if (r["Leave Type"]) {
-          const type = String(r["Leave Type"]);
-          const btn = [...document.querySelectorAll(".type-btn")].find(b => b.textContent.includes(type));
-          // fallback: select by value
-          if (type) {
-            // selectType expects btn; just set value and add selected manually
-            document.querySelectorAll(".type-btn").forEach(b => b.classList.remove("selected"));
-            $("leaveTypeValue").value = type;
-          }
-          // show other field
-          if (type === "Other") $("otherField").classList.remove("hidden");
-        }
+
+        // IMPORTANT: these keys must match your sheet headers
+        setTypeUI(r["LeaveType"]);
         $("otherSpecify").value = r["OtherSpecify"] || "";
         $("startDate").value = r["StartDate"] || $("startDate").value;
         $("endDate").value = r["EndDate"] || $("endDate").value;
@@ -285,34 +298,33 @@
     if (!startDate || !endDate) return alert("Please select dates");
     if (!reason) { $("reason").classList.add("err"); return alert("Please specify reason"); }
 
+    const leaveDays = calcWorkingDays(startDate, endDate);
+
     showLoader("Saving draft…");
     const btn = $("submitBtn");
     btn.disabled = true;
     btn.classList.add("opacity-70");
 
-    const payload = {
-      requestId: editingRequestId || "",
-      userId: userProfile?.userId || "",
-      name: userProfile?.displayName || "",
-      leaveType: type,
-      otherSpecify: other,
-      startDate,
-      endDate,
-      dayPart,
-      reason
-    };
-
     try {
-      const res = await fetch(API_URL + "?action=save_draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
+      const payload = {
+        requestId: editingRequestId || "",
+        userId: userProfile?.userId || "",
+        name: userProfile?.displayName || "",
+        leaveType: type,
+        otherSpecify: other,
+        startDate,
+        endDate,
+        dayPart,
+        reason,
+        leaveDays
+      };
+
+      // ✅ KEY FIX: POST as text/plain + action in body
+      const data = await apiPost("save_draft", payload);
 
       if (!data || !data.ok || !data.requestId) throw new Error(data?.error || "save_draft_failed");
 
-      // Send draft signal to chat
+      // Send draft signal to chat (WebhookHub will pick this up)
       await liff.sendMessages([{ type:"text", text: DRAFT_PREFIX + data.requestId }]);
 
       hideLoader();
