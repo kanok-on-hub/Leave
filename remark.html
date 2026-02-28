@@ -1,229 +1,202 @@
 <!doctype html>
-<html lang="th">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
-  <title>Reject Remark</title>
+  <title>Remark</title>
 
-  <!-- LIFF + Tailwind -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    body { background:#f0f4f8; color:#0f172a; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background:#f0f4f8; color:#1e293b; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #eef2ff; box-shadow: 0 8px 30px rgba(15,23,42,0.06); padding: 1.1rem; }
-    .input { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.9rem; padding:.85rem; width:100%; }
-    .input:focus { outline:none; border-color:#93c5fd; box-shadow:0 0 0 4px rgba(59,130,246,.10); }
-    .btn { border-radius: .95rem; padding:.95rem 1rem; font-weight:800; }
-    .btn-primary { background:#111827; color:#fff; }
-    .btn-primary:active { transform: translateY(1px); }
-    .btn-ghost { background:#f1f5f9; color:#0f172a; }
-    .pill { border:1px solid #e2e8f0; background:#f8fafc; border-radius:999px; padding:.25rem .6rem; font-size:.75rem; color:#334155; }
-    .toast {
-      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
-      background: rgba(15, 23, 42, .92); color: #fff; padding: .75rem 1rem;
-      border-radius: 999px; font-size: .85rem; box-shadow: 0 10px 25px rgba(0,0,0,.18);
-      opacity: 0; pointer-events: none; transition: opacity .18s ease;
-      max-width: calc(100% - 28px); text-align: center;
-    }
-    .toast.show { opacity: 1; }
-    .err { border-color:#ef4444 !important; box-shadow: 0 0 0 4px rgba(239,68,68,.10) !important; }
+    .input { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#334155; }
+    .input:focus { background:#fff; border-color:#3b82f6; box-shadow:0 0 0 4px rgba(59,130,246,.1); }
+    .err { border-color:#ef4444 !important; background-color:#fef2f2 !important; box-shadow:0 0 0 4px rgba(239,68,68,.1) !important; }
   </style>
 </head>
 
-<body class="min-h-screen">
-  <div class="max-w-md mx-auto px-4 py-5">
-    <!-- Header -->
-    <div class="mb-4">
-      <div class="flex items-center justify-between">
+<body class="pb-16">
+  <div class="max-w-md mx-auto min-h-screen flex flex-col">
+    <div class="bg-white px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] mb-6 relative z-10">
+      <div class="flex items-center gap-4">
+        <div id="avatarBox" class="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-lg ring-2 ring-blue-50 hidden">
+          <img id="profileImg" src="" class="w-full h-full object-cover">
+        </div>
         <div>
-          <div class="text-xl font-extrabold tracking-tight">Reject Remark</div>
-          <div class="text-slate-500 text-sm mt-1" id="subtitle">กรอกเหตุผลการไม่อนุมัติ แล้วกดบันทึก</div>
-        </div>
-        <span class="pill" id="modePill">Reject</span>
-      </div>
-
-      <div class="mt-3 card">
-        <div class="flex items-center justify-between">
-          <div class="text-sm text-slate-600">Approver</div>
-          <div class="text-sm font-bold" id="displayName">-</div>
-        </div>
-        <div class="flex items-center justify-between mt-2">
-          <div class="text-sm text-slate-600">Request ID</div>
-          <div class="text-sm font-mono" id="requestIdText">-</div>
+          <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Remark</h1>
+          <p id="userGreet" class="text-slate-500 text-sm font-medium mt-0.5 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
+          </p>
         </div>
       </div>
     </div>
 
-    <!-- Remark -->
-    <div class="card space-y-4">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div class="flex items-center justify-between">
-          <div class="text-sm font-bold">หมายเหตุ (Remark)</div>
-          <div class="text-xs text-slate-500" id="reqInfo">บังคับกรอก</div>
-        </div>
-        <div class="text-xs text-slate-500 mt-2 leading-relaxed">
-          ระบบจะบันทึกเหตุผลนี้และส่ง “ปฏิเสธ:&lt;requestId&gt;” เข้าแชทของคุณ เพื่อให้บอทอัปเดตสถานะเป็น Rejected อัตโนมัติ
-        </div>
-      </div>
+    <div class="px-5 space-y-6 flex-1" id="contentRoot"></div>
 
-      <div>
-        <label class="text-sm font-bold text-slate-700 mb-2 block">เหตุผลการปฏิเสธ <span class="text-red-500">*</span></label>
-        <textarea id="remark" class="input resize-none" rows="5" placeholder="เช่น ขอเอกสารเพิ่มเติม / วันที่ซ้อนกับงานสำคัญ / โปรดแก้ไขช่วงวันที่ลา ..."></textarea>
-        <div class="text-xs text-slate-500 mt-2" id="hint">
-          แนะนำ: เขียนให้ชัดเจนและ actionable เพื่อให้ Requester แก้ไขได้เร็ว
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-3 pt-1">
-        <button class="btn btn-ghost" id="btnClose" type="button">ปิด</button>
-        <button class="btn btn-primary" id="btnSave" type="button">บันทึก</button>
+    <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
+      <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-[180px]">
+        <div class="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+        <div class="font-bold text-slate-700 text-sm" id="loaderText">Processing...</div>
       </div>
     </div>
   </div>
 
-  <div class="toast" id="toast">Toast</div>
-
 <script>
-/** =========================
- * CONFIG (แก้แค่ 2 จุดนี้)
- * ========================= */
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // Leave Backend Web App URL (doGet/doPost)
-const LIFF_ID = "2008997153-NcbVCWqs"; // LIFF ID ของหน้า remark
+  const LIFF_ID = "2008997153-n5oIYKUP";
+  const API_URL  = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec";
 
-/** =========================
- * STATE
- * ========================= */
-const state = {
-  requestId: "",
-  userId: "",
-  displayName: ""
-};
+  const $ = (id) => document.getElementById(id);
 
-/** =========================
- * UTILS
- * ========================= */
-function qs(name) {
-  const url = new URL(location.href);
-  return url.searchParams.get(name) || "";
-}
-function toast(msg) {
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1800);
-}
-function setLoading(isLoading) {
-  const btn = document.getElementById("btnSave");
-  btn.disabled = isLoading;
-  btn.style.opacity = isLoading ? "0.65" : "1";
-  btn.textContent = isLoading ? "กำลังบันทึก..." : "บันทึก";
-}
-async function backendPost(action, payload = {}) {
-  const res = await fetch(BACKEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...payload })
-  });
-  const json = await res.json();
-  if (!json || json.success !== true) throw new Error((json && json.error) || "Backend error");
-  return json.data;
-}
+  function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
+  function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
+  function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
-/** =========================
- * FLOW
- * ========================= */
-function validate() {
-  const el = document.getElementById("remark");
-  el.classList.remove("err");
-  const v = String(el.value || "").trim();
-  if (!v) {
-    el.classList.add("err");
-    toast("กรุณากรอก Remark");
-    return false;
-  }
-  return true;
-}
-
-async function saveRemarkAndSendText() {
-  try {
-    if (!state.requestId) { toast("ไม่พบ requestId"); return; }
-    if (!validate()) return;
-
-    setLoading(true);
-
-    const remark = String(document.getElementById("remark").value || "").trim();
-
-    // 1) Save reject remark to backend
-    // Backend should:
-    // - Verify actor is approver (optional)
-    // - Save remark to Leave_Requests.Remark
-    // - (Optional) set status to "REJECTED_PENDING" หรือยังไม่เปลี่ยนก็ได้ แล้วให้ bot เปลี่ยน
-    await backendPost("save_reject_remark", {
-      requestId: state.requestId,
-      actorUserId: state.userId,
-      actorName: state.displayName,
-      remark
+  async function postFormUrlEncoded_(obj) {
+    const body = new URLSearchParams();
+    Object.keys(obj || {}).forEach(k => body.set(k, obj[k] == null ? "" : String(obj[k])));
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: body.toString()
     });
-
-    // 2) Send text to my own chat so bot can handle rejection loop
-    // format exactly as you asked:
-    const text = `ปฏิเสธ:${state.requestId}`;
-    await liff.sendMessages([{ type: "text", text }]);
-
-    toast("บันทึกแล้ว ✅");
-    setTimeout(() => liff.closeWindow(), 350);
-
-  } catch (err) {
-    console.error(err);
-    toast("บันทึกไม่สำเร็จ");
-  } finally {
-    setLoading(false);
+    return res.json();
   }
-}
 
-/** =========================
- * INIT
- * ========================= */
-async function init() {
-  // read requestId from query
-  state.requestId = qs("requestId");
-  document.getElementById("requestIdText").textContent = state.requestId || "-";
+  async function getRequest_(requestId) {
+    const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
+    return res.json();
+  }
 
-  // init LIFF
-  if (LIFF_ID && LIFF_ID !== "PUT_YOUR_LIFF_ID_HERE") {
+  async function submitReject_(requestId) {
+    const ta = document.getElementById("rejectRemark");
+    const err = document.getElementById("remarkErr");
+    const remark = (ta?.value || "").trim();
+    if (!remark) {
+      err?.classList.remove("hidden");
+      ta?.classList.add("err");
+      return;
+    }
+
+    try {
+      showLoader("Submitting...");
+      const profile = await liff.getProfile();
+
+      const data = await postFormUrlEncoded_({
+        action: "reject_leave",
+        requestId,
+        actorUserId: profile.userId,
+        remark
+      });
+
+      if (!data || !data.ok) {
+        hideLoader();
+        alert("Reject failed: " + (data?.error || "unknown"));
+        return;
+      }
+
+      await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
+      hideLoader();
+      doneAndExit();
+    } catch (e) {
+      hideLoader();
+      alert("Reject failed: " + (e?.message || e));
+    }
+  }
+
+  function escapeHtml_(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
+
+  function renderNotFound_() {
+    $("contentRoot").innerHTML = `<div class="card">หาใบลาไม่เจอค่ะ</div>`;
+  }
+
+  function renderViewRemark_(req, requestId) {
+    $("title").textContent = "Remark";
+    $("userGreet").textContent = "Details";
+
+    const remark = (req.remark || "").toString().trim() || "-";
+    $("contentRoot").innerHTML = `
+      <div class="card space-y-3">
+        <div class="text-lg font-bold text-slate-800">Remark</div>
+        <div class="text-xs text-slate-500">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml_(remark)}</div>
+        <button class="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors" onclick="doneAndExit()">Close</button>
+      </div>`;
+  }
+
+  function renderReject_(req, requestId) {
+    $("title").textContent = "Reject Leave ❌";
+    $("userGreet").textContent = "Please provide remark";
+
+    $("contentRoot").innerHTML = `
+      <div class="card space-y-4">
+        <div>
+          <div class="text-sm font-bold text-slate-700">Summary</div>
+          <div class="text-xs text-slate-500 mt-1">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
+          <div class="text-sm text-slate-700 mt-2 space-y-1">
+            <div><b>Requester:</b> ${escapeHtml_(req.name || "-")}</div>
+            <div><b>Leave Type:</b> ${escapeHtml_(req.leaveType || "-")}</div>
+            <div><b>Date:</b> ${escapeHtml_(req.startDate || "-")} → ${escapeHtml_(req.endDate || "-")}</div>
+            <div><b>Days:</b> ${escapeHtml_(String(req.leaveDays ?? "-"))}</div>
+            <div class="mt-2"><b>Reason:</b> ${escapeHtml_(req.reason || "-")}</div>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-slate-700">Remark <span class="text-red-500">*</span></label>
+          <textarea id="rejectRemark" rows="5" class="input resize-none mt-2" placeholder="กรุณาระบุเหตุผลที่ไม่อนุมัติ..."></textarea>
+          <div id="remarkErr" class="hidden text-xs text-red-600 mt-2">กรุณากรอก Remark</div>
+        </div>
+
+        <button class="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-bold text-lg transition-colors"
+          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">Submit Reject</button>
+
+        <button class="w-full bg-slate-100 text-slate-700 py-3.5 rounded-xl font-bold text-lg" onclick="doneAndExit()">Cancel</button>
+      </div>`;
+  }
+
+  async function init() {
     await liff.init({ liffId: LIFF_ID });
-  } else {
-    await liff.init({});
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+
+    const profile = await liff.getProfile();
+    $("userGreet").innerHTML = `Hi, <span class="font-bold text-slate-800">${profile.displayName}</span>`;
+    if (profile.pictureUrl) { $("profileImg").src = profile.pictureUrl; $("avatarBox").classList.remove("hidden"); }
+
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode");
+    const requestId = params.get("requestId");
+
+    if (!mode || !requestId) { renderNotFound_(); return; }
+
+    showLoader("Loading...");
+    let req = null;
+    try {
+      const data = await getRequest_(requestId);
+      if (data && data.ok && data.request) req = data.request;
+    } catch(e) {}
+    hideLoader();
+
+    if (!req) { renderNotFound_(); return; }
+
+    if (mode === "view_remark") return renderViewRemark_(req, requestId);
+    if (mode === "reject") return renderReject_(req, requestId);
+
+    renderNotFound_();
   }
 
-  if (!liff.isLoggedIn()) {
-    liff.login({ redirectUri: location.href });
-    return;
-  }
-
-  // profile
-  const profile = await liff.getProfile();
-  state.userId = profile.userId;
-  state.displayName = profile.displayName || "-";
-  document.getElementById("displayName").textContent = state.displayName;
-
-  // bind
-  document.getElementById("btnClose").addEventListener("click", () => {
-    try { liff.closeWindow(); } catch(e) { window.close(); }
+  init().catch(err => {
+    console.error(err);
+    alert("LIFF init error: " + (err.message || err));
   });
-  document.getElementById("btnSave").addEventListener("click", saveRemarkAndSendText);
-
-  // keyboard UX: cmd/ctrl+enter to save
-  document.getElementById("remark").addEventListener("keydown", (ev) => {
-    if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") saveRemarkAndSendText();
-  });
-}
-
-init().catch(err => {
-  console.error(err);
-  toast("เปิดหน้า Remark ไม่สำเร็จ");
-});
 </script>
 </body>
 </html>
