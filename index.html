@@ -307,6 +307,22 @@
     return res.json();
   }
 
+  // ✅ Fix: convert any date-ish value -> yyyy-mm-dd for <input type="date">
+  function toDateInputValue_(v) {
+    if (!v) return "";
+    const s = String(v).trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+    const iso = /^(\d{4}-\d{2}-\d{2})T/.exec(s);
+    if (iso) return iso[1];
+
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+
+    return "";
+  }
+
   // ✅ Prefill เร็วขึ้น: ไม่คุม loader ในนี้ ให้ init() คุม
   async function prefillIfEdit_() {
     const params = new URLSearchParams(location.search);
@@ -329,8 +345,8 @@
     }
 
     $('otherSpecify').value = r.otherSpecify || "";
-    $('startDate').value = r.startDate || $('startDate').value;
-    $('endDate').value = r.endDate || $('endDate').value;
+    $('startDate').value = toDateInputValue_(r.startDate) || $('startDate').value;
+    $('endDate').value = toDateInputValue_(r.endDate) || $('endDate').value;
 
     const dp = r.dayPart || "Full Day";
     const durBtns = document.querySelectorAll(".dur-btn");
@@ -407,7 +423,7 @@
     const mode = params.get("mode");
     const requestId = params.get("requestId");
 
-    // ✅ redirect remark flows to remark.html (ไฟล์เล็ก โหลดไว)
+    // ✅ redirect remark flows to remark.html
     if ((mode === "reject" || mode === "view_remark") && requestId) {
       const qs = new URLSearchParams({ mode, requestId }).toString();
       location.replace("remark.html?" + qs);
@@ -428,17 +444,16 @@
       $('endDate').setAttribute("min", today);
     }
 
-    // ✅ start loading balance/holidays in background (ไม่ await ทันที)
+    // ✅ start loading balance/holidays in background
     const pBalance = fetchLeaveBalance(userProfile.userId);
     const pHolidays = fetchHolidays();
 
-    // ✅ edit-first: prefill ก่อน เพื่อให้ user รู้สึกเร็ว
+    // ✅ edit-first
     if (isEdit) {
       try { await prefillIfEdit_(); }
       catch (e) { console.error("Prefill error:", e); }
     }
 
-    // ✅ รอข้อมูลประกอบ แล้ว validate อีกที
     await Promise.allSettled([pBalance, pHolidays]);
     validateOnFly();
 
