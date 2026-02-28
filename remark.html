@@ -1,238 +1,229 @@
 <!doctype html>
-<html lang="en">
+<html lang="th">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
   <title>Reject Remark</title>
+
+  <!-- LIFF + Tailwind -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <style>
-    body { font-family:'Plus Jakarta Sans',sans-serif; background:#f0f4f8; color:#1e293b; -webkit-tap-highlight-color:transparent; }
-    ::-webkit-scrollbar { width:0; background:transparent; }
-    .card { background:#fff; border-radius:1.25rem; box-shadow:0 4px 20px -2px rgba(226,232,240,.6); border:1px solid #f1f5f9; padding:1.25rem; }
-    .input{ background:#f8fafc; border:1px solid #e2e8f0; border-radius:.75rem; padding:.875rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#334155; }
-    .input:focus{ background:#fff; border-color:#3b82f6; box-shadow:0 0 0 4px rgba(59,130,246,.1); }
-    .err{ border-color:#ef4444!important; background:#fef2f2!important; box-shadow:0 0 0 4px rgba(239,68,68,.1)!important; }
-    .info-badge{ font-size:11px; font-weight:700; background:#eff6ff; color:#2563eb; padding:4px 12px; border-radius:9999px; border:1px solid #dbeafe; box-shadow:0 1px 2px rgba(0,0,0,.05); display:inline-flex; align-items:center; white-space:nowrap;}
-    @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
-    .shake-anim{ animation:shake .4s ease-in-out; }
+    body { background:#f0f4f8; color:#0f172a; -webkit-tap-highlight-color: transparent; }
+    .card { background:#fff; border-radius: 1.25rem; border:1px solid #eef2ff; box-shadow: 0 8px 30px rgba(15,23,42,0.06); padding: 1.1rem; }
+    .input { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.9rem; padding:.85rem; width:100%; }
+    .input:focus { outline:none; border-color:#93c5fd; box-shadow:0 0 0 4px rgba(59,130,246,.10); }
+    .btn { border-radius: .95rem; padding:.95rem 1rem; font-weight:800; }
+    .btn-primary { background:#111827; color:#fff; }
+    .btn-primary:active { transform: translateY(1px); }
+    .btn-ghost { background:#f1f5f9; color:#0f172a; }
+    .pill { border:1px solid #e2e8f0; background:#f8fafc; border-radius:999px; padding:.25rem .6rem; font-size:.75rem; color:#334155; }
+    .toast {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      background: rgba(15, 23, 42, .92); color: #fff; padding: .75rem 1rem;
+      border-radius: 999px; font-size: .85rem; box-shadow: 0 10px 25px rgba(0,0,0,.18);
+      opacity: 0; pointer-events: none; transition: opacity .18s ease;
+      max-width: calc(100% - 28px); text-align: center;
+    }
+    .toast.show { opacity: 1; }
+    .err { border-color:#ef4444 !important; box-shadow: 0 0 0 4px rgba(239,68,68,.10) !important; }
   </style>
 </head>
 
-<body class="pb-32">
-  <div class="max-w-md mx-auto min-h-screen flex flex-col">
-    <!-- Header (tone same as index.html) -->
-    <div class="bg-white px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] mb-6 relative z-10">
-      <div class="flex items-center gap-4">
-        <div id="avatarBox" class="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-lg ring-2 ring-blue-50 hidden">
-          <img id="profileImg" src="" class="w-full h-full object-cover">
+<body class="min-h-screen">
+  <div class="max-w-md mx-auto px-4 py-5">
+    <!-- Header -->
+    <div class="mb-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-xl font-extrabold tracking-tight">Reject Remark</div>
+          <div class="text-slate-500 text-sm mt-1" id="subtitle">กรอกเหตุผลการไม่อนุมัติ แล้วกดบันทึก</div>
         </div>
-        <div class="flex-1">
-          <div class="flex items-center justify-between gap-3">
-            <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Reject Remark ✍️</h1>
-            <span class="info-badge">Approver</span>
-          </div>
-          <p id="userGreet" class="text-slate-500 text-sm font-medium mt-0.5 flex items-center gap-1">
-            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
-          </p>
+        <span class="pill" id="modePill">Reject</span>
+      </div>
+
+      <div class="mt-3 card">
+        <div class="flex items-center justify-between">
+          <div class="text-sm text-slate-600">Approver</div>
+          <div class="text-sm font-bold" id="displayName">-</div>
+        </div>
+        <div class="flex items-center justify-between mt-2">
+          <div class="text-sm text-slate-600">Request ID</div>
+          <div class="text-sm font-mono" id="requestIdText">-</div>
         </div>
       </div>
     </div>
 
-    <div class="px-5 space-y-6 flex-1">
-      <!-- Summary (optional) -->
-      <div class="card">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-          <div class="text-sm font-bold text-slate-700">Request Summary</div>
-          <div id="reqIdBadge" class="text-[11px] font-bold text-slate-400">ID: -</div>
+    <!-- Remark -->
+    <div class="card space-y-4">
+      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div class="flex items-center justify-between">
+          <div class="text-sm font-bold">หมายเหตุ (Remark)</div>
+          <div class="text-xs text-slate-500" id="reqInfo">บังคับกรอก</div>
         </div>
-
-        <div class="space-y-2 text-sm">
-          <div class="flex justify-between gap-4">
-            <div class="text-slate-500 font-medium">Requester</div>
-            <div id="sumName" class="text-slate-800 font-bold text-right">-</div>
-          </div>
-          <div class="flex justify-between gap-4">
-            <div class="text-slate-500 font-medium">Leave Type</div>
-            <div id="sumType" class="text-slate-800 font-bold text-right">-</div>
-          </div>
-          <div class="flex justify-between gap-4">
-            <div class="text-slate-500 font-medium">Date</div>
-            <div id="sumDate" class="text-slate-800 font-bold text-right">-</div>
-          </div>
-          <div class="flex justify-between gap-4">
-            <div class="text-slate-500 font-medium">Duration</div>
-            <div id="sumDur" class="text-slate-800 font-bold text-right">-</div>
-          </div>
-        </div>
-
-        <div id="sumNote" class="mt-3 text-[11px] text-slate-400 font-medium leading-relaxed">
-          Please provide a clear reason for rejection. This remark will be shared with the requester.
+        <div class="text-xs text-slate-500 mt-2 leading-relaxed">
+          ระบบจะบันทึกเหตุผลนี้และส่ง “ปฏิเสธ:&lt;requestId&gt;” เข้าแชทของคุณ เพื่อให้บอทอัปเดตสถานะเป็น Rejected อัตโนมัติ
         </div>
       </div>
 
-      <!-- Remark -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-between px-1">
-          <label class="text-sm font-bold text-slate-700">Remark <span class="text-red-500">*</span></label>
-          <span id="charCount" class="text-[11px] font-bold text-slate-400">0/500</span>
-        </div>
-
-        <textarea id="remark" rows="5" class="input resize-none" placeholder="Please explain why you reject this request..." oninput="onRemarkInput()"></textarea>
-
-        <div id="remarkError" class="hidden bg-red-50 border border-red-100 rounded-lg p-3 flex items-start gap-3 shake-anim">
-          <div class="text-red-500 mt-0.5">⚠️</div>
-          <div>
-            <p class="text-xs font-bold text-red-600">Remark required</p>
-            <p class="text-[10px] text-red-500 leading-tight mt-0.5">
-              Please enter a remark before submitting.
-            </p>
-          </div>
-        </div>
-
-        <div class="flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg">
-          <span class="text-slate-400 mt-0.5">ℹ️</span>
-          <div class="text-[10px] text-slate-500 font-medium leading-relaxed">
-            Tip: Keep it specific and actionable (e.g. “Insufficient handover plan”, “Overlapping critical meeting”, etc.)
-          </div>
+      <div>
+        <label class="text-sm font-bold text-slate-700 mb-2 block">เหตุผลการปฏิเสธ <span class="text-red-500">*</span></label>
+        <textarea id="remark" class="input resize-none" rows="5" placeholder="เช่น ขอเอกสารเพิ่มเติม / วันที่ซ้อนกับงานสำคัญ / โปรดแก้ไขช่วงวันที่ลา ..."></textarea>
+        <div class="text-xs text-slate-500 mt-2" id="hint">
+          แนะนำ: เขียนให้ชัดเจนและ actionable เพื่อให้ Requester แก้ไขได้เร็ว
         </div>
       </div>
-    </div>
 
-    <!-- Bottom action -->
-    <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40">
-      <button id="submitBtn" onclick="handleSubmit()" class="w-full bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-rose-500/25 active:scale-[0.98] transition-all">
-        Submit Rejection
-      </button>
+      <div class="grid grid-cols-2 gap-3 pt-1">
+        <button class="btn btn-ghost" id="btnClose" type="button">ปิด</button>
+        <button class="btn btn-primary" id="btnSave" type="button">บันทึก</button>
+      </div>
     </div>
   </div>
 
-  <!-- Loader -->
-  <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
-    <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-[200px]">
-      <div class="w-12 h-12 border-4 border-slate-100 border-t-rose-600 rounded-full animate-spin mb-3"></div>
-      <div class="font-bold text-slate-700 text-sm" id="loaderText">Processing...</div>
-    </div>
-  </div>
+  <div class="toast" id="toast">Toast</div>
 
-  <script>
-    // ======= CONFIG =======
-    const LIFF_ID = "2008997153-NcbVCWqs";
-    const API_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec";
-    // ======================
+<script>
+/** =========================
+ * CONFIG (แก้แค่ 2 จุดนี้)
+ * ========================= */
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // Leave Backend Web App URL (doGet/doPost)
+const LIFF_ID = "2008997153-NcbVCWqs"; // LIFF ID ของหน้า remark
 
-    let userProfile = null;
-    let requestId = "";
+/** =========================
+ * STATE
+ * ========================= */
+const state = {
+  requestId: "",
+  userId: "",
+  displayName: ""
+};
 
-    const $ = (id) => document.getElementById(id);
+/** =========================
+ * UTILS
+ * ========================= */
+function qs(name) {
+  const url = new URL(location.href);
+  return url.searchParams.get(name) || "";
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+function setLoading(isLoading) {
+  const btn = document.getElementById("btnSave");
+  btn.disabled = isLoading;
+  btn.style.opacity = isLoading ? "0.65" : "1";
+  btn.textContent = isLoading ? "กำลังบันทึก..." : "บันทึก";
+}
+async function backendPost(action, payload = {}) {
+  const res = await fetch(BACKEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...payload })
+  });
+  const json = await res.json();
+  if (!json || json.success !== true) throw new Error((json && json.error) || "Backend error");
+  return json.data;
+}
 
-    function showLoader(msg){
-      $("loaderText").textContent = msg || "Processing...";
-      $("loader").classList.remove("hidden");
-      $("loader").classList.add("flex");
-    }
-    function hideLoader(){
-      $("loader").classList.add("hidden");
-      $("loader").classList.remove("flex");
-    }
+/** =========================
+ * FLOW
+ * ========================= */
+function validate() {
+  const el = document.getElementById("remark");
+  el.classList.remove("err");
+  const v = String(el.value || "").trim();
+  if (!v) {
+    el.classList.add("err");
+    toast("กรุณากรอก Remark");
+    return false;
+  }
+  return true;
+}
 
-    function onRemarkInput(){
-      const v = $("remark").value || "";
-      $("charCount").textContent = `${Math.min(v.length, 500)}/500`;
-      $("remark").classList.remove("err");
-      $("remarkError").classList.add("hidden");
-      if (v.length > 500) $("remark").value = v.slice(0, 500);
-    }
+async function saveRemarkAndSendText() {
+  try {
+    if (!state.requestId) { toast("ไม่พบ requestId"); return; }
+    if (!validate()) return;
 
-    async function fetchRequestSummary(reqId){
-      try {
-        const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(reqId) + "&t=" + Date.now());
-        const data = await res.json();
-        if (!data || !data.ok || !data.request) return;
+    setLoading(true);
 
-        const r = data.request;
-        $("reqIdBadge").textContent = "ID: " + (reqId || "-");
-        $("sumName").textContent = r.name || "-";
+    const remark = String(document.getElementById("remark").value || "").trim();
 
-        let type = r.leaveType || "-";
-        if (type === "Other" && r.otherSpecify) type = "Other (" + r.otherSpecify + ")";
-        $("sumType").textContent = type;
-
-        const s = r.startDate || "-";
-        const e = r.endDate || "-";
-        $("sumDate").textContent = (s && e) ? `${s} → ${e}` : "-";
-
-        $("sumDur").textContent = r.dayPart || "-";
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    async function handleSubmit(){
-      const remark = ($("remark").value || "").trim();
-      if (!remark) {
-        $("remark").classList.add("err");
-        $("remarkError").classList.remove("hidden");
-        return;
-      }
-
-      const btn = $("submitBtn");
-      btn.disabled = true;
-      btn.classList.add("opacity-70", "cursor-not-allowed");
-      btn.textContent = "Submitting...";
-
-      showLoader("Submitting...");
-
-      try {
-        // ส่ง text เข้าแชท เพื่อให้ webhook ฝั่งบอทไปอัปเดตสถานะ + push ผลกลับ requester
-        // Format แนะนำ: LEAVE_REJECT:<requestId>:<remark>
-        // หมายเหตุ: ถ้า remark ยาว/มีอักขระพิเศษ ก็ยังเป็น text ปกติ (แต่ควรจำกัด 500)
-        await liff.sendMessages([{ type: "text", text: `LEAVE_REJECT:${requestId}:${remark}` }]);
-        hideLoader();
-        try { liff.closeWindow(); } catch(e) { alert("Submitted. Please close window."); }
-      } catch (e) {
-        hideLoader();
-        alert("Send failed: " + (e.message || e));
-        btn.disabled = false;
-        btn.classList.remove("opacity-70", "cursor-not-allowed");
-        btn.textContent = "Submit Rejection";
-      }
-    }
-
-    async function init(){
-      const params = new URLSearchParams(location.search);
-      requestId = params.get("requestId") || "";
-
-      showLoader("Loading...");
-
-      await liff.init({ liffId: LIFF_ID });
-      if (!liff.isLoggedIn()) { liff.login(); return; }
-
-      userProfile = await liff.getProfile();
-      $("userGreet").innerHTML = `Hi, <span class="font-bold text-slate-800">${userProfile.displayName}</span>`;
-      if (userProfile.pictureUrl) {
-        $("profileImg").src = userProfile.pictureUrl;
-        $("avatarBox").classList.remove("hidden");
-      }
-
-      if (!requestId) {
-        hideLoader();
-        alert("Missing requestId");
-        try { liff.closeWindow(); } catch(e){}
-        return;
-      }
-
-      await fetchRequestSummary(requestId);
-      onRemarkInput();
-      hideLoader();
-    }
-
-    init().catch(err => {
-      console.error(err);
-      hideLoader();
-      alert("LIFF init error: " + (err.message || err));
+    // 1) Save reject remark to backend
+    // Backend should:
+    // - Verify actor is approver (optional)
+    // - Save remark to Leave_Requests.Remark
+    // - (Optional) set status to "REJECTED_PENDING" หรือยังไม่เปลี่ยนก็ได้ แล้วให้ bot เปลี่ยน
+    await backendPost("save_reject_remark", {
+      requestId: state.requestId,
+      actorUserId: state.userId,
+      actorName: state.displayName,
+      remark
     });
-  </script>
+
+    // 2) Send text to my own chat so bot can handle rejection loop
+    // format exactly as you asked:
+    const text = `ปฏิเสธ:${state.requestId}`;
+    await liff.sendMessages([{ type: "text", text }]);
+
+    toast("บันทึกแล้ว ✅");
+    setTimeout(() => liff.closeWindow(), 350);
+
+  } catch (err) {
+    console.error(err);
+    toast("บันทึกไม่สำเร็จ");
+  } finally {
+    setLoading(false);
+  }
+}
+
+/** =========================
+ * INIT
+ * ========================= */
+async function init() {
+  // read requestId from query
+  state.requestId = qs("requestId");
+  document.getElementById("requestIdText").textContent = state.requestId || "-";
+
+  // init LIFF
+  if (LIFF_ID && LIFF_ID !== "PUT_YOUR_LIFF_ID_HERE") {
+    await liff.init({ liffId: LIFF_ID });
+  } else {
+    await liff.init({});
+  }
+
+  if (!liff.isLoggedIn()) {
+    liff.login({ redirectUri: location.href });
+    return;
+  }
+
+  // profile
+  const profile = await liff.getProfile();
+  state.userId = profile.userId;
+  state.displayName = profile.displayName || "-";
+  document.getElementById("displayName").textContent = state.displayName;
+
+  // bind
+  document.getElementById("btnClose").addEventListener("click", () => {
+    try { liff.closeWindow(); } catch(e) { window.close(); }
+  });
+  document.getElementById("btnSave").addEventListener("click", saveRemarkAndSendText);
+
+  // keyboard UX: cmd/ctrl+enter to save
+  document.getElementById("remark").addEventListener("keydown", (ev) => {
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") saveRemarkAndSendText();
+  });
+}
+
+init().catch(err => {
+  console.error(err);
+  toast("เปิดหน้า Remark ไม่สำเร็จ");
+});
+</script>
 </body>
 </html>
