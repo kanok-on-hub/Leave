@@ -35,6 +35,15 @@
 
   function $(id){ return document.getElementById(id); }
 
+  async function apiPost(action, payloadObj) {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, // ✅ avoid OPTIONS
+      body: JSON.stringify({ action, ...payloadObj })
+    });
+    return await res.json();
+  }
+
   async function init(){
     const params = new URLSearchParams(location.search);
     requestId = params.get("requestId") || "";
@@ -55,16 +64,12 @@
     $("msg").textContent = "Submitting...";
 
     try {
-      const res = await fetch(API_URL + "?action=reject_with_remark", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requestId,
-          actorUserId: actor?.userId || "",
-          remark
-        })
+      const data = await apiPost("reject_with_remark", {
+        requestId,
+        actorUserId: actor?.userId || "",
+        remark
       });
-      const data = await res.json();
+
       if (!data || !data.ok) throw new Error(data?.error || "reject_failed");
 
       $("msg").textContent = "Saved. You can close this window.";
