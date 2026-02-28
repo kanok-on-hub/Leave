@@ -1,284 +1,238 @@
-<!-- =========================================================
-  remark.html — Reject Remark (Approver) — Remark Only
-  ---------------------------------------------------------
-  ✅ หน้าเดียว: กรอก Remark แล้วบันทึก
-  ✅ หลังบันทึกสำเร็จ: ส่งข้อความเข้า “แชทตัวเอง”:
-        ปฏิเสธ:<requestId>
-     เพื่อให้ LINE Webhook Bot reply Flex (Rejected) ในแชท Approver
-     (และ Bot จะไป push แจ้งผลไป Requester ต่อเองตาม flow)
-  ✅ บังคับกรอก Remark (ไม่ว่าง)
-  ✅ Prefill ข้อมูล leave สั้นๆ (optional) เพื่อให้ approver เห็น context
-  ✅ ไม่แก้ไขข้อมูลอื่นใด นอกจาก Remark + decision=REJECT
-
-  Query params:
-    requestId=...   (required)
-========================================================= -->
-
 <!doctype html>
-<html lang="th">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
   <title>Reject Remark</title>
-
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { background:#f0f4f8; color:#0f172a; -webkit-tap-highlight-color: transparent; }
-    .card { background:#fff; border-radius: 1.25rem; border:1px solid #eef2ff; box-shadow: 0 8px 30px rgba(15,23,42,0.06); padding: 1.1rem; }
-    .input { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.9rem; padding:.85rem; width:100%; outline:none; }
-    .input:focus { border-color:#fca5a5; box-shadow: 0 0 0 3px rgba(239,68,68,.15); }
-    .btn { border-radius: .95rem; padding:.95rem 1rem; font-weight:800; width:100%; }
-    .btn-danger { background:#dc2626; color:#fff; }
-    .btn-ghost { background:#eef2ff; color:#1e3a8a; }
-    .pill { display:inline-flex; align-items:center; gap:.5rem; border-radius:999px; padding:.35rem .75rem; font-weight:800; font-size:.75rem; }
-    .pill-red { background:#fee2e2; color:#991b1b; }
-    .muted { color:#64748b; }
-    .hint { font-size:.82rem; color:#64748b; line-height:1.35rem; }
-    .hr { height:1px; background:#e2e8f0; margin: 1rem 0; }
-    .toast {
-      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
-      background: rgba(15,23,42,.92); color:#fff; padding: .75rem 1rem; border-radius: 999px;
-      font-size: .9rem; display:none; z-index:9999;
-      max-width: calc(100% - 32px); white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
-    }
-    .loading { display:none; }
-    .skeleton { background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: shimmer 1.2s ease-in-out infinite; border-radius: .8rem; }
-    @keyframes shimmer { 0% { background-position: 100% 0 } 100% { background-position: -100% 0 } }
-    .err { border-color:#ef4444 !important; background:#fef2f2 !important; }
+    body { font-family:'Plus Jakarta Sans',sans-serif; background:#f0f4f8; color:#1e293b; -webkit-tap-highlight-color:transparent; }
+    ::-webkit-scrollbar { width:0; background:transparent; }
+    .card { background:#fff; border-radius:1.25rem; box-shadow:0 4px 20px -2px rgba(226,232,240,.6); border:1px solid #f1f5f9; padding:1.25rem; }
+    .input{ background:#f8fafc; border:1px solid #e2e8f0; border-radius:.75rem; padding:.875rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#334155; }
+    .input:focus{ background:#fff; border-color:#3b82f6; box-shadow:0 0 0 4px rgba(59,130,246,.1); }
+    .err{ border-color:#ef4444!important; background:#fef2f2!important; box-shadow:0 0 0 4px rgba(239,68,68,.1)!important; }
+    .info-badge{ font-size:11px; font-weight:700; background:#eff6ff; color:#2563eb; padding:4px 12px; border-radius:9999px; border:1px solid #dbeafe; box-shadow:0 1px 2px rgba(0,0,0,.05); display:inline-flex; align-items:center; white-space:nowrap;}
+    @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+    .shake-anim{ animation:shake .4s ease-in-out; }
   </style>
 </head>
 
-<body class="min-h-screen">
-  <div class="max-w-xl mx-auto px-4 py-5">
-    <div class="flex items-center justify-between mb-4">
-      <div>
-        <div class="text-xl font-extrabold tracking-tight">Reject Remark</div>
-        <div class="text-sm muted">กรอกเหตุผลการปฏิเสธ (บังคับ)</div>
+<body class="pb-32">
+  <div class="max-w-md mx-auto min-h-screen flex flex-col">
+    <!-- Header (tone same as index.html) -->
+    <div class="bg-white px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] mb-6 relative z-10">
+      <div class="flex items-center gap-4">
+        <div id="avatarBox" class="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-lg ring-2 ring-blue-50 hidden">
+          <img id="profileImg" src="" class="w-full h-full object-cover">
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center justify-between gap-3">
+            <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Reject Remark ✍️</h1>
+            <span class="info-badge">Approver</span>
+          </div>
+          <p id="userGreet" class="text-slate-500 text-sm font-medium mt-0.5 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
+          </p>
+        </div>
       </div>
-      <div class="pill pill-red">REJECT</div>
     </div>
 
-    <div class="card mb-4">
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <div class="text-sm font-bold">Approver</div>
-          <div id="approverName" class="text-base font-extrabold">—</div>
-          <div class="hint mt-1">บันทึกแล้วระบบจะส่ง “ปฏิเสธ:&lt;requestId&gt;” เข้าห้องแชทของคุณอัตโนมัติ ✅</div>
+    <div class="px-5 space-y-6 flex-1">
+      <!-- Summary (optional) -->
+      <div class="card">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+          <div class="text-sm font-bold text-slate-700">Request Summary</div>
+          <div id="reqIdBadge" class="text-[11px] font-bold text-slate-400">ID: -</div>
         </div>
-        <div class="text-right">
-          <div class="text-xs muted">Request ID</div>
-          <div id="requestIdLabel" class="font-extrabold text-sm">—</div>
+
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between gap-4">
+            <div class="text-slate-500 font-medium">Requester</div>
+            <div id="sumName" class="text-slate-800 font-bold text-right">-</div>
+          </div>
+          <div class="flex justify-between gap-4">
+            <div class="text-slate-500 font-medium">Leave Type</div>
+            <div id="sumType" class="text-slate-800 font-bold text-right">-</div>
+          </div>
+          <div class="flex justify-between gap-4">
+            <div class="text-slate-500 font-medium">Date</div>
+            <div id="sumDate" class="text-slate-800 font-bold text-right">-</div>
+          </div>
+          <div class="flex justify-between gap-4">
+            <div class="text-slate-500 font-medium">Duration</div>
+            <div id="sumDur" class="text-slate-800 font-bold text-right">-</div>
+          </div>
+        </div>
+
+        <div id="sumNote" class="mt-3 text-[11px] text-slate-400 font-medium leading-relaxed">
+          Please provide a clear reason for rejection. This remark will be shared with the requester.
         </div>
       </div>
 
-      <div class="hr"></div>
-
-      <!-- Optional: show leave summary -->
-      <div id="summaryBox" class="hidden">
-        <div class="text-sm font-bold mb-2">สรุปใบลา</div>
-        <div class="grid grid-cols-1 gap-2 text-sm">
-          <div class="flex justify-between"><span class="muted">ชื่อ</span><span id="sName" class="font-bold">—</span></div>
-          <div class="flex justify-between"><span class="muted">ประเภท</span><span id="sType" class="font-bold">—</span></div>
-          <div class="flex justify-between"><span class="muted">วันที่</span><span id="sDate" class="font-bold">—</span></div>
-          <div class="flex justify-between"><span class="muted">ช่วงเวลา</span><span id="sPart" class="font-bold">—</span></div>
-          <div class="flex justify-between"><span class="muted">จำนวนวัน</span><span id="sDays" class="font-bold">—</span></div>
-          <div class="flex justify-between"><span class="muted">ไฟล์แนบ</span><span id="sAtt" class="font-bold">—</span></div>
+      <!-- Remark -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between px-1">
+          <label class="text-sm font-bold text-slate-700">Remark <span class="text-red-500">*</span></label>
+          <span id="charCount" class="text-[11px] font-bold text-slate-400">0/500</span>
         </div>
-        <div class="hr"></div>
-      </div>
 
-      <div>
-        <label class="text-sm font-bold">Remark (เหตุผลการปฏิเสธ)</label>
-        <textarea id="remark" class="input mt-2" rows="5" placeholder="กรุณาระบุเหตุผลการปฏิเสธให้ชัดเจน..."></textarea>
-        <div id="remarkErr" class="hint mt-2 hidden text-red-600">กรุณากรอก Remark ก่อนบันทึก</div>
-      </div>
+        <textarea id="remark" rows="5" class="input resize-none" placeholder="Please explain why you reject this request..." oninput="onRemarkInput()"></textarea>
 
-      <div class="grid grid-cols-1 gap-3 mt-4">
-        <button id="btnReject" class="btn btn-danger">บันทึกการปฏิเสธ</button>
-        <button id="btnClose" class="btn btn-ghost">ปิด</button>
-      </div>
+        <div id="remarkError" class="hidden bg-red-50 border border-red-100 rounded-lg p-3 flex items-start gap-3 shake-anim">
+          <div class="text-red-500 mt-0.5">⚠️</div>
+          <div>
+            <p class="text-xs font-bold text-red-600">Remark required</p>
+            <p class="text-[10px] text-red-500 leading-tight mt-0.5">
+              Please enter a remark before submitting.
+            </p>
+          </div>
+        </div>
 
-      <div id="loading" class="loading mt-3">
-        <div class="skeleton h-10 w-full"></div>
-        <div class="hint mt-2">กำลังบันทึก…</div>
+        <div class="flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg">
+          <span class="text-slate-400 mt-0.5">ℹ️</span>
+          <div class="text-[10px] text-slate-500 font-medium leading-relaxed">
+            Tip: Keep it specific and actionable (e.g. “Insufficient handover plan”, “Overlapping critical meeting”, etc.)
+          </div>
+        </div>
       </div>
+    </div>
+
+    <!-- Bottom action -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40">
+      <button id="submitBtn" onclick="handleSubmit()" class="w-full bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-rose-500/25 active:scale-[0.98] transition-all">
+        Submit Rejection
+      </button>
     </div>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <!-- Loader -->
+  <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
+    <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-[200px]">
+      <div class="w-12 h-12 border-4 border-slate-100 border-t-rose-600 rounded-full animate-spin mb-3"></div>
+      <div class="font-bold text-slate-700 text-sm" id="loaderText">Processing...</div>
+    </div>
+  </div>
 
-<script>
-/** ================= CONFIG ================= **/
+  <script>
+    // ======= CONFIG =======
+    const LIFF_ID = "2008997153-NcbVCWqs";
+    const API_URL = "https://script.google.com/macros/s/AKfycbw3PCZGZG_puGPUY_FdDYAR765UUs8Wr2ERJDzXmOz-nOLt_V25JkUSdrWXNFNk3-h4/exec";
+    // ======================
 
-// ✅ เปลี่ยนเป็น WebApp URL ของ Leave Backend (Apps Script)
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec";
+    let userProfile = null;
+    let requestId = "";
 
-// ✅ LIFF ID ของหน้า remark (ควรเป็น LIFF อีกตัว หรือ reuse ตัวเดียวก็ได้)
-const LIFF_ID = "2008997153-NcbVCWqs";
+    const $ = (id) => document.getElementById(id);
 
-/** ================= STATE ================= **/
-const qs = new URLSearchParams(location.search);
-const requestId = (qs.get("requestId") || "").trim();
-
-let profile = { userId:"", displayName:"" };
-
-/** ================= ELEMENTS ================= **/
-const el = (id) => document.getElementById(id);
-const approverName = el("approverName");
-const requestIdLabel = el("requestIdLabel");
-const remark = el("remark");
-const remarkErr = el("remarkErr");
-const btnReject = el("btnReject");
-const btnClose = el("btnClose");
-const loading = el("loading");
-const toast = el("toast");
-
-const summaryBox = el("summaryBox");
-const sName = el("sName");
-const sType = el("sType");
-const sDate = el("sDate");
-const sPart = el("sPart");
-const sDays = el("sDays");
-const sAtt = el("sAtt");
-
-/** ================= UI HELPERS ================= **/
-function showToast(msg, ms=2200) {
-  toast.textContent = msg;
-  toast.style.display = "block";
-  setTimeout(() => toast.style.display = "none", ms);
-}
-function setLoading(on) {
-  loading.style.display = on ? "block" : "none";
-  btnReject.disabled = on;
-  btnClose.disabled = on;
-  btnReject.style.opacity = on ? 0.7 : 1;
-}
-function validRemark() {
-  const v = (remark.value || "").trim();
-  const ok = v.length > 0;
-  remark.classList.toggle("err", !ok);
-  remarkErr.classList.toggle("hidden", ok);
-  return ok;
-}
-
-/** ================= NETWORK ================= **/
-async function apiGet(paramsObj) {
-  const url = new URL(BACKEND_URL);
-  Object.entries(paramsObj).forEach(([k,v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString(), { method: "GET" });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  return await res.json();
-}
-async function apiPost(payload) {
-  const res = await fetch(BACKEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=UTF-8" },
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  return await res.json();
-}
-
-/** ================= PREFILL SUMMARY (optional) ================= **/
-function fmtDateRange(s, e) {
-  if (!s || !e) return "—";
-  const a = String(s).slice(0,10);
-  const b = String(e).slice(0,10);
-  return a === b ? a : (a + " → " + b);
-}
-async function loadLeaveSummary() {
-  if (!requestId) return;
-
-  try {
-    const data = await apiGet({ action: "get_leave", requestId });
-    if (data && data.success && data.leave) {
-      const L = data.leave;
-      sName.textContent = L.name || "—";
-      const type = L.leaveType || "—";
-      const other = (type === "Other" && L.otherSpecify) ? ` (${L.otherSpecify})` : "";
-      sType.textContent = type + other;
-      sDate.textContent = fmtDateRange(L.startDate, L.endDate);
-      sPart.textContent = L.dayPart || "—";
-      sDays.textContent = (L.leaveDays != null) ? String(L.leaveDays) : "—";
-      sAtt.textContent = L.attachmentUrl ? "✅ มีไฟล์แนบ" : "—";
-      summaryBox.classList.remove("hidden");
+    function showLoader(msg){
+      $("loaderText").textContent = msg || "Processing...";
+      $("loader").classList.remove("hidden");
+      $("loader").classList.add("flex");
     }
-  } catch (e) {
-    // ignore summary errors
-    console.warn("summary load failed", e);
-  }
-}
+    function hideLoader(){
+      $("loader").classList.add("hidden");
+      $("loader").classList.remove("flex");
+    }
 
-/** ================= LIFF INIT ================= **/
-async function initLIFF() {
-  await liff.init({ liffId: LIFF_ID });
+    function onRemarkInput(){
+      const v = $("remark").value || "";
+      $("charCount").textContent = `${Math.min(v.length, 500)}/500`;
+      $("remark").classList.remove("err");
+      $("remarkError").classList.add("hidden");
+      if (v.length > 500) $("remark").value = v.slice(0, 500);
+    }
 
-  if (!liff.isLoggedIn()) {
-    liff.login({ redirectUri: location.href });
-    return;
-  }
+    async function fetchRequestSummary(reqId){
+      try {
+        const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(reqId) + "&t=" + Date.now());
+        const data = await res.json();
+        if (!data || !data.ok || !data.request) return;
 
-  const p = await liff.getProfile();
-  profile = { userId: p.userId, displayName: p.displayName || "" };
-  approverName.textContent = profile.displayName || "—";
-}
+        const r = data.request;
+        $("reqIdBadge").textContent = "ID: " + (reqId || "-");
+        $("sumName").textContent = r.name || "-";
 
-/** ================= SUBMIT REJECT ================= **/
-async function submitReject() {
-  if (!requestId) { showToast("ไม่พบ requestId"); return; }
-  if (!validRemark()) { showToast("กรุณากรอก Remark"); return; }
+        let type = r.leaveType || "-";
+        if (type === "Other" && r.otherSpecify) type = "Other (" + r.otherSpecify + ")";
+        $("sumType").textContent = type;
 
-  setLoading(true);
-  try {
-    // 1) save reject remark to backend
-    const payload = {
-      action: "reject_leave",
-      requestId,
-      actorUserId: profile.userId,
-      remark: remark.value.trim()
-    };
+        const s = r.startDate || "-";
+        const e = r.endDate || "-";
+        $("sumDate").textContent = (s && e) ? `${s} → ${e}` : "-";
 
-    const res = await apiPost(payload);
-    if (!res || !res.success) throw new Error(res && res.message ? res.message : "reject failed");
+        $("sumDur").textContent = r.dayPart || "-";
+      } catch (e) {
+        // ignore
+      }
+    }
 
-    showToast("บันทึกการปฏิเสธเรียบร้อยแล้ว ✅");
+    async function handleSubmit(){
+      const remark = ($("remark").value || "").trim();
+      if (!remark) {
+        $("remark").classList.add("err");
+        $("remarkError").classList.remove("hidden");
+        return;
+      }
 
-    // 2) send text to own chat so bot can reply flex + push requester
-    const msgText = "ปฏิเสธ:" + requestId;
-    await liff.sendMessages([{ type: "text", text: msgText }]);
+      const btn = $("submitBtn");
+      btn.disabled = true;
+      btn.classList.add("opacity-70", "cursor-not-allowed");
+      btn.textContent = "Submitting...";
 
-    // 3) close
-    setTimeout(() => liff.closeWindow(), 500);
+      showLoader("Submitting...");
 
-  } catch (e) {
-    console.error(e);
-    showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้งนะคะ");
-  } finally {
-    setLoading(false);
-  }
-}
+      try {
+        // ส่ง text เข้าแชท เพื่อให้ webhook ฝั่งบอทไปอัปเดตสถานะ + push ผลกลับ requester
+        // Format แนะนำ: LEAVE_REJECT:<requestId>:<remark>
+        // หมายเหตุ: ถ้า remark ยาว/มีอักขระพิเศษ ก็ยังเป็น text ปกติ (แต่ควรจำกัด 500)
+        await liff.sendMessages([{ type: "text", text: `LEAVE_REJECT:${requestId}:${remark}` }]);
+        hideLoader();
+        try { liff.closeWindow(); } catch(e) { alert("Submitted. Please close window."); }
+      } catch (e) {
+        hideLoader();
+        alert("Send failed: " + (e.message || e));
+        btn.disabled = false;
+        btn.classList.remove("opacity-70", "cursor-not-allowed");
+        btn.textContent = "Submit Rejection";
+      }
+    }
 
-/** ================= EVENTS ================= **/
-remark.addEventListener("input", validRemark);
-btnReject.addEventListener("click", submitReject);
-btnClose.addEventListener("click", () => liff.closeWindow());
+    async function init(){
+      const params = new URLSearchParams(location.search);
+      requestId = params.get("requestId") || "";
 
-/** ================= BOOT ================= **/
-(async function boot() {
-  try {
-    requestIdLabel.textContent = requestId || "—";
-    setLoading(true);
-    await initLIFF();
-    await loadLeaveSummary();
-  } catch (e) {
-    console.error(e);
-    showToast("เปิดหน้า Remark ไม่สำเร็จ");
-  } finally {
-    setLoading(false);
-  }
-})();
-</script>
+      showLoader("Loading...");
+
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) { liff.login(); return; }
+
+      userProfile = await liff.getProfile();
+      $("userGreet").innerHTML = `Hi, <span class="font-bold text-slate-800">${userProfile.displayName}</span>`;
+      if (userProfile.pictureUrl) {
+        $("profileImg").src = userProfile.pictureUrl;
+        $("avatarBox").classList.remove("hidden");
+      }
+
+      if (!requestId) {
+        hideLoader();
+        alert("Missing requestId");
+        try { liff.closeWindow(); } catch(e){}
+        return;
+      }
+
+      await fetchRequestSummary(requestId);
+      onRemarkInput();
+      hideLoader();
+    }
+
+    init().catch(err => {
+      console.error(err);
+      hideLoader();
+      alert("LIFF init error: " + (err.message || err));
+    });
+  </script>
 </body>
 </html>
