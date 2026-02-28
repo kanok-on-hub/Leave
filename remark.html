@@ -18,24 +18,18 @@
   </style>
 </head>
 
-<body class="pb-16">
+<body class="pb-20">
   <div class="max-w-md mx-auto min-h-screen flex flex-col">
     <div class="bg-white px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] mb-6 relative z-10">
-      <div class="flex items-center gap-4">
-        <div id="avatarBox" class="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-lg ring-2 ring-blue-50 hidden">
-          <img id="profileImg" src="" class="w-full h-full object-cover">
-        </div>
-        <div>
-          <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Remark</h1>
-          <p id="userGreet" class="text-slate-500 text-sm font-medium mt-0.5 flex items-center gap-1">
-            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
-          </p>
-        </div>
+      <div>
+        <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Remark</h1>
+        <p id="subTitle" class="text-slate-500 text-sm font-medium mt-1">Loading...</p>
       </div>
     </div>
 
-    <div class="px-5 space-y-6 flex-1" id="contentRoot"></div>
+    <div class="px-5 pb-24" id="rootBox"></div>
 
+    <!-- Loader -->
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
       <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-[180px]">
         <div class="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-3"></div>
@@ -45,14 +39,29 @@
   </div>
 
 <script>
+  // ======= CONFIG =======
   const LIFF_ID = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec";
+  // ======================
 
   const $ = (id) => document.getElementById(id);
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
+
+  function escapeHtml_(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
+
+  async function getRequest_(requestId) {
+    const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
+    return res.json();
+  }
 
   async function postFormUrlEncoded_(obj) {
     const body = new URLSearchParams();
@@ -65,9 +74,51 @@
     return res.json();
   }
 
-  async function getRequest_(requestId) {
-    const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
-    return res.json();
+  function renderNotFound_() {
+    $("rootBox").innerHTML = `<div class="card">หาใบลาไม่เจอค่ะ</div>`;
+  }
+
+  function renderViewRemark_(req, requestId) {
+    const remark = (req.remark || "").toString().trim() || "-";
+    $("title").textContent = "Remark";
+    $("subTitle").textContent = "Details";
+    $("rootBox").innerHTML = `
+      <div class="card space-y-3">
+        <div class="text-lg font-bold text-slate-800">Remark</div>
+        <div class="text-xs text-slate-500">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml_(remark)}</div>
+        <button class="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors" onclick="doneAndExit()">Close</button>
+      </div>`;
+  }
+
+  function renderReject_(req, requestId) {
+    $("title").textContent = "Reject Leave ❌";
+    $("subTitle").textContent = "Please provide remark";
+    $("rootBox").innerHTML = `
+      <div class="card space-y-4">
+        <div>
+          <div class="text-sm font-bold text-slate-700">Summary</div>
+          <div class="text-xs text-slate-500 mt-1">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
+          <div class="text-sm text-slate-700 mt-2 space-y-1">
+            <div><b>Requester:</b> ${escapeHtml_(req.name || "-")}</div>
+            <div><b>Leave Type:</b> ${escapeHtml_(req.leaveType || "-")}</div>
+            <div><b>Date:</b> ${escapeHtml_(req.startDate || "-")} → ${escapeHtml_(req.endDate || "-")}</div>
+            <div><b>Days:</b> ${escapeHtml_(String(req.leaveDays ?? "-"))}</div>
+            <div class="mt-2"><b>Reason:</b> ${escapeHtml_(req.reason || "-")}</div>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-slate-700">Remark <span class="text-red-500">*</span></label>
+          <textarea id="rejectRemark" rows="5" class="input resize-none mt-2" placeholder="กรุณาระบุเหตุผลที่ไม่อนุมัติ..."></textarea>
+          <div id="remarkErr" class="hidden text-xs text-red-600 mt-2">กรุณากรอก Remark</div>
+        </div>
+
+        <button class="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-bold text-lg transition-colors"
+          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">Submit Reject</button>
+
+        <button class="w-full bg-slate-100 text-slate-700 py-3.5 rounded-xl font-bold text-lg" onclick="doneAndExit()">Cancel</button>
+      </div>`;
   }
 
   async function submitReject_(requestId) {
@@ -106,95 +157,41 @@
     }
   }
 
-  function escapeHtml_(s) {
-    return String(s ?? "")
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
-  function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
-
-  function renderNotFound_() {
-    $("contentRoot").innerHTML = `<div class="card">หาใบลาไม่เจอค่ะ</div>`;
-  }
-
-  function renderViewRemark_(req, requestId) {
-    $("title").textContent = "Remark";
-    $("userGreet").textContent = "Details";
-
-    const remark = (req.remark || "").toString().trim() || "-";
-    $("contentRoot").innerHTML = `
-      <div class="card space-y-3">
-        <div class="text-lg font-bold text-slate-800">Remark</div>
-        <div class="text-xs text-slate-500">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml_(remark)}</div>
-        <button class="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors" onclick="doneAndExit()">Close</button>
-      </div>`;
-  }
-
-  function renderReject_(req, requestId) {
-    $("title").textContent = "Reject Leave ❌";
-    $("userGreet").textContent = "Please provide remark";
-
-    $("contentRoot").innerHTML = `
-      <div class="card space-y-4">
-        <div>
-          <div class="text-sm font-bold text-slate-700">Summary</div>
-          <div class="text-xs text-slate-500 mt-1">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
-          <div class="text-sm text-slate-700 mt-2 space-y-1">
-            <div><b>Requester:</b> ${escapeHtml_(req.name || "-")}</div>
-            <div><b>Leave Type:</b> ${escapeHtml_(req.leaveType || "-")}</div>
-            <div><b>Date:</b> ${escapeHtml_(req.startDate || "-")} → ${escapeHtml_(req.endDate || "-")}</div>
-            <div><b>Days:</b> ${escapeHtml_(String(req.leaveDays ?? "-"))}</div>
-            <div class="mt-2"><b>Reason:</b> ${escapeHtml_(req.reason || "-")}</div>
-          </div>
-        </div>
-
-        <div>
-          <label class="text-sm font-bold text-slate-700">Remark <span class="text-red-500">*</span></label>
-          <textarea id="rejectRemark" rows="5" class="input resize-none mt-2" placeholder="กรุณาระบุเหตุผลที่ไม่อนุมัติ..."></textarea>
-          <div id="remarkErr" class="hidden text-xs text-red-600 mt-2">กรุณากรอก Remark</div>
-        </div>
-
-        <button class="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-bold text-lg transition-colors"
-          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">Submit Reject</button>
-
-        <button class="w-full bg-slate-100 text-slate-700 py-3.5 rounded-xl font-bold text-lg" onclick="doneAndExit()">Cancel</button>
-      </div>`;
-  }
-
   async function init() {
+    showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
     if (!liff.isLoggedIn()) { liff.login(); return; }
-
-    const profile = await liff.getProfile();
-    $("userGreet").innerHTML = `Hi, <span class="font-bold text-slate-800">${profile.displayName}</span>`;
-    if (profile.pictureUrl) { $("profileImg").src = profile.pictureUrl; $("avatarBox").classList.remove("hidden"); }
 
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
     const requestId = params.get("requestId");
 
-    if (!mode || !requestId) { renderNotFound_(); return; }
+    if (!mode || !requestId) {
+      hideLoader();
+      renderNotFound_();
+      return;
+    }
 
-    showLoader("Loading...");
     let req = null;
     try {
       const data = await getRequest_(requestId);
       if (data && data.ok && data.request) req = data.request;
     } catch(e) {}
+
     hideLoader();
 
-    if (!req) { renderNotFound_(); return; }
+    if (!req) return renderNotFound_();
 
     if (mode === "view_remark") return renderViewRemark_(req, requestId);
     if (mode === "reject") return renderReject_(req, requestId);
 
+    // unknown mode
     renderNotFound_();
   }
 
   init().catch(err => {
     console.error(err);
+    hideLoader();
     alert("LIFF init error: " + (err.message || err));
   });
 </script>
