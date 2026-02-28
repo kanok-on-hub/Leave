@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
-  <title>Leave Request</title>
+  <title>Remark</title>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -12,124 +12,22 @@
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#f0f4f8; color:#1e293b; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #eef2ff; box-shadow: 0 8px 30px rgba(15,23,42,0.06); padding: 1.1rem; }
-    .type-btn { width:100%; text-align:left; padding:1rem; border:1px solid transparent; border-radius:1rem; background:#f8fafc; color:#64748b; transition:.2s; position:relative; }
-    .type-btn:active { transform: scale(.98); }
-    .type-btn.selected { border-color:#3b82f6; background:#eff6ff; color:#1d4ed8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:600; }
-    .type-btn.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563eb; }
     .input { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#334155; }
     .input:focus { background:#fff; border-color:#3b82f6; box-shadow:0 0 0 4px rgba(59,130,246,.1); }
     .err { border-color:#ef4444 !important; background-color:#fef2f2 !important; box-shadow:0 0 0 4px rgba(239,68,68,.1) !important; }
-    .info-badge { font-size:11px; font-weight:700; background:#eff6ff; color:#2563eb; padding:4px 12px; border-radius:9999px; border:1px solid #dbeafe; display:inline-flex; align-items:center; white-space:nowrap; }
   </style>
 </head>
 
-<body class="pb-32">
+<body class="pb-20">
   <div class="max-w-md mx-auto min-h-screen flex flex-col">
     <div class="bg-white px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] mb-6 relative z-10">
-      <div class="flex items-center gap-4">
-        <div id="avatarBox" class="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-lg ring-2 ring-blue-50 hidden">
-          <img id="profileImg" src="" class="w-full h-full object-cover">
-        </div>
-        <div>
-          <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Leave Request 📝</h1>
-          <p id="userGreet" class="text-slate-500 text-sm font-medium mt-0.5 flex items-center gap-1">
-            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
-          </p>
-        </div>
+      <div>
+        <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Remark</h1>
+        <p id="subTitle" class="text-slate-500 text-sm font-medium mt-1">Loading...</p>
       </div>
     </div>
 
-    <!-- MAIN FORM UI -->
-    <div class="px-5 space-y-6 flex-1" id="formUI">
-      <div class="space-y-3">
-        <div class="flex justify-between items-center px-1 h-7">
-          <label class="text-sm font-bold text-slate-700">Leave Type <span class="text-red-500">*</span></label>
-          <span id="remainingBox" class="hidden info-badge">Remaining:&nbsp;<span id="remainingValue" class="ml-0.5">-</span></span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <button type="button" onclick="selectType(this,'Sick')" class="type-btn group"><div class="text-2xl mb-1">🤒</div><span class="text-sm font-medium">Sick Leave</span></button>
-          <button type="button" onclick="selectType(this,'Annual')" class="type-btn group"><div class="text-2xl mb-1">🏖️</div><span class="text-sm font-medium">Annual Leave</span></button>
-          <button type="button" onclick="selectType(this,'Personal')" class="type-btn group"><div class="text-2xl mb-1">🚗</div><span class="text-sm font-medium">Personal Leave</span></button>
-          <button type="button" onclick="selectType(this,'Other')" class="type-btn group"><div class="text-2xl mb-1">📝</div><span class="text-sm font-medium">Other</span></button>
-        </div>
-        <input type="hidden" id="leaveTypeValue">
-      </div>
-
-      <div id="otherField" class="hidden space-y-2">
-        <label class="text-sm font-bold text-blue-600 ml-1 italic">Please specify Other type *</label>
-        <input type="text" id="otherSpecify" class="input" placeholder="e.g. Ordination">
-      </div>
-
-      <div class="card space-y-4">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3 h-10">
-          <label class="text-sm font-bold text-slate-700">Date <span class="text-red-500">*</span></label>
-          <span id="dayBadge" class="info-badge hidden">Working: 0 Days</span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-1.5">
-            <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400">Start Date</div>
-            <input type="date" id="startDate" class="input text-center font-medium" onchange="validateOnFly()">
-          </div>
-          <div class="space-y-1.5">
-            <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400">End Date</div>
-            <input type="date" id="endDate" class="input text-center font-medium" onchange="validateOnFly()">
-          </div>
-        </div>
-
-        <div id="quotaError" class="hidden bg-red-50 border border-red-100 rounded-lg p-3 flex items-start gap-3">
-          <div class="text-red-500 mt-0.5">⚠️</div>
-          <div>
-            <p class="text-xs font-bold text-red-600">Quota Exceeded</p>
-            <p class="text-[10px] text-red-500 leading-tight mt-0.5">
-              You requested <span id="reqDaysDisplay" class="font-bold"></span> days, but you only have
-              <span id="remDaysDisplay" class="font-bold"></span> days remaining.
-            </p>
-          </div>
-        </div>
-
-        <div class="flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg">
-          <span class="text-slate-400 mt-0.5">ℹ️</span>
-          <div class="text-[10px] text-slate-500 font-medium leading-relaxed">
-            Weekends & Company Holidays are automatically excluded from the calculation.
-          </div>
-        </div>
-      </div>
-
-      <div class="card space-y-3">
-        <label class="text-sm font-bold text-slate-700 block">Duration <span class="text-red-500">*</span></label>
-        <div class="flex bg-slate-100 p-1.5 rounded-xl gap-1">
-          <button type="button" onclick="selectDur(this,'Full Day')" class="dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-blue-600 ring-1 ring-black/5">Full Day</button>
-          <button type="button" onclick="selectDur(this,'Morning')" class="dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700">Morning</button>
-          <button type="button" onclick="selectDur(this,'Afternoon')" class="dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700">Afternoon</button>
-        </div>
-        <input type="hidden" id="durationValue" value="Full Day">
-      </div>
-
-      <div class="space-y-2">
-        <label class="text-sm font-bold text-slate-700 ml-1">Reason <span class="text-red-500">*</span></label>
-        <textarea id="reason" rows="3" class="input resize-none" placeholder="Please specify your reason clearly..." oninput="validateOnFly()"></textarea>
-      </div>
-
-      <div class="card bg-slate-50 border border-slate-200">
-        <div class="text-sm font-bold text-slate-700">Attachment</div>
-        <div class="text-xs text-slate-500 mt-1">
-          (ส่งไฟล์แนบในแชทหลังจากบอทแจ้งให้แนบ — ระบบนี้แนบผ่านแชทเท่านั้น)
-        </div>
-        <div class="text-[11px] text-red-500 mt-2">
-          Required if Sick Leave ≥ 3 working days
-        </div>
-      </div>
-    </div>
-
-    <!-- Sticky submit -->
-    <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
-      <button id="submitBtn" onclick="handleSubmit()"
-        class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-500/30 active:scale-[0.98] transition-all">
-        Submit
-      </button>
-    </div>
+    <div class="px-5 pb-24" id="rootBox"></div>
 
     <!-- Loader -->
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
@@ -143,12 +41,8 @@
 <script>
   // ======= CONFIG =======
   const LIFF_ID = "2008997153-n5oIYKUP";
-  const API_URL  = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // e.g. https://script.google.com/macros/s/.../exec
+  const API_URL  = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec";
   // ======================
-
-  let companyHolidays = [];
-  let userProfile = null;
-  let leaveBalances = {};
 
   const $ = (id) => document.getElementById(id);
 
@@ -156,139 +50,17 @@
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
-  function selectType(btn, val) {
-    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    $('leaveTypeValue').value = val;
-
-    if (val === 'Other') $('otherField').classList.remove('hidden');
-    else { $('otherField').classList.add('hidden'); $('otherSpecify').value = ''; }
-
-    updateRemainingUI();
-    validateOnFly();
+  function escapeHtml_(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
+  function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
 
-  function selectDur(btn, val) {
-    document.querySelectorAll('.dur-btn').forEach(b => {
-      b.className = "dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700";
-      b.disabled = false;
-      b.classList.remove('opacity-40');
-    });
-    btn.className = "dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-blue-600 ring-1 ring-black/5";
-    $('durationValue').value = val;
-    validateOnFly();
-  }
-
-  async function fetchHolidays() {
-    try {
-      const res = await fetch(API_URL + "?action=get_holidays&t=" + Date.now());
-      const data = await res.json();
-      companyHolidays = Array.isArray(data) ? data : [];
-    } catch (e) {
-      companyHolidays = [];
-    }
-  }
-
-  async function fetchLeaveBalance(userId) {
-    if (!userId) return;
-    try {
-      const res = await fetch(API_URL + "?action=get_balance&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.balances)) {
-        leaveBalances = {};
-        data.balances.forEach(b => {
-          if (!b || !b.type) return;
-          const key = String(b.type);
-          const remaining = Number(b.remaining);
-          leaveBalances[key] = isNaN(remaining) ? 0 : remaining;
-        });
-      } else {
-        leaveBalances = {};
-      }
-    } catch (e) {
-      leaveBalances = {};
-    }
-    updateRemainingUI();
-  }
-
-  function updateRemainingUI() {
-    const type = $('leaveTypeValue').value;
-    const box = $('remainingBox');
-    const valEl = $('remainingValue');
-    if (!type) { box.classList.add('hidden'); return; }
-
-    const remaining = (leaveBalances[type] != null) ? leaveBalances[type] : null;
-    if (remaining == null) box.classList.add('hidden');
-    else {
-      const unit = (remaining === 1) ? "Day" : "Days";
-      valEl.textContent = `${remaining} ${unit}`;
-      box.classList.remove('hidden');
-    }
-  }
-
-  function calcWorkingDays(sStr, eStr) {
-    if (!sStr || !eStr) return 0;
-    const s = new Date(sStr);
-    const e = new Date(eStr);
-    if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
-
-    let total = 0;
-    const cur = new Date(s);
-    while (cur <= e) {
-      const dow = cur.getDay();
-      const isWeekend = (dow === 0 || dow === 6);
-      const dateStr = cur.toISOString().split('T')[0];
-      const isHoliday = Array.isArray(companyHolidays) && companyHolidays.includes(dateStr);
-      if (!isWeekend && !isHoliday) total++;
-      cur.setDate(cur.getDate() + 1);
-    }
-    return total;
-  }
-
-  function validateOnFly() {
-    const type = $('leaveTypeValue').value;
-    const s = $('startDate').value;
-    const e = $('endDate').value;
-    const badge = $('dayBadge');
-    const quotaError = $('quotaError');
-
-    $('startDate').classList.remove('err');
-    $('endDate').classList.remove('err');
-    quotaError.classList.add('hidden');
-
-    if (!s || !e) { badge.classList.add('hidden'); return true; }
-
-    let days = calcWorkingDays(s, e);
-
-    // Auto lock half-day for >1 day
-    const durBtns = document.querySelectorAll('.dur-btn');
-    if (days > 1) {
-      if ($('durationValue').value !== 'Full Day') selectDur(durBtns[0], 'Full Day');
-      durBtns[1].disabled = true; durBtns[2].disabled = true;
-      durBtns[1].classList.add('opacity-40'); durBtns[2].classList.add('opacity-40');
-    } else {
-      durBtns[1].disabled = false; durBtns[2].disabled = false;
-      durBtns[1].classList.remove('opacity-40'); durBtns[2].classList.remove('opacity-40');
-    }
-
-    const dp = $('durationValue').value || "Full Day";
-    if ((dp === "Morning" || dp === "Afternoon") && days > 0) days -= 0.5;
-
-    const unit = (days === 1) ? "Day" : "Days";
-    badge.textContent = `Working: ${days} ${unit}`;
-    badge.classList.remove('hidden');
-
-    // Remaining rule
-    const remaining = (type && leaveBalances[type] != null) ? leaveBalances[type] : null;
-    if (type && remaining != null && days > 0 && days > remaining) {
-      $('startDate').classList.add('err');
-      $('endDate').classList.add('err');
-      $('reqDaysDisplay').textContent = days;
-      $('remDaysDisplay').textContent = remaining;
-      quotaError.classList.remove('hidden');
-      return false;
-    }
-    return true;
+  async function getRequest_(requestId) {
+    const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
+    return res.json();
   }
 
   async function postFormUrlEncoded_(obj) {
@@ -302,115 +74,86 @@
     return res.json();
   }
 
-  async function getRequest_(requestId) {
-    const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
-    return res.json();
+  function renderNotFound_() {
+    $("rootBox").innerHTML = `<div class="card">หาใบลาไม่เจอค่ะ</div>`;
   }
 
-  // ✅ Fix: convert any date-ish value -> yyyy-mm-dd for <input type="date">
-  function toDateInputValue_(v) {
-    if (!v) return "";
-    const s = String(v).trim();
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-
-    const iso = /^(\d{4}-\d{2}-\d{2})T/.exec(s);
-    if (iso) return iso[1];
-
-    const d = new Date(s);
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-
-    return "";
+  function renderViewRemark_(req, requestId) {
+    const remark = (req.remark || "").toString().trim() || "-";
+    $("title").textContent = "Remark";
+    $("subTitle").textContent = "Details";
+    $("rootBox").innerHTML = `
+      <div class="card space-y-3">
+        <div class="text-lg font-bold text-slate-800">Remark</div>
+        <div class="text-xs text-slate-500">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml_(remark)}</div>
+        <button class="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors" onclick="doneAndExit()">Close</button>
+      </div>`;
   }
 
-  // ✅ Prefill เร็วขึ้น: ไม่คุม loader ในนี้ ให้ init() คุม
-  async function prefillIfEdit_() {
-    const params = new URLSearchParams(location.search);
-    const mode = params.get("mode");
-    const requestId = params.get("requestId");
-    if (mode !== "edit" || !requestId) return;
+  function renderReject_(req, requestId) {
+    $("title").textContent = "Reject Leave ❌";
+    $("subTitle").textContent = "Please provide remark";
+    $("rootBox").innerHTML = `
+      <div class="card space-y-4">
+        <div>
+          <div class="text-sm font-bold text-slate-700">Summary</div>
+          <div class="text-xs text-slate-500 mt-1">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
+          <div class="text-sm text-slate-700 mt-2 space-y-1">
+            <div><b>Requester:</b> ${escapeHtml_(req.name || "-")}</div>
+            <div><b>Leave Type:</b> ${escapeHtml_(req.leaveType || "-")}</div>
+            <div><b>Date:</b> ${escapeHtml_(req.startDate || "-")} → ${escapeHtml_(req.endDate || "-")}</div>
+            <div><b>Days:</b> ${escapeHtml_(String(req.leaveDays ?? "-"))}</div>
+            <div class="mt-2"><b>Reason:</b> ${escapeHtml_(req.reason || "-")}</div>
+          </div>
+        </div>
 
-    const data = await getRequest_(requestId);
-    if (!data || !data.ok || !data.request) return;
+        <div>
+          <label class="text-sm font-bold text-slate-700">Remark <span class="text-red-500">*</span></label>
+          <textarea id="rejectRemark" rows="5" class="input resize-none mt-2" placeholder="กรุณาระบุเหตุผลที่ไม่อนุมัติ..."></textarea>
+          <div id="remarkErr" class="hidden text-xs text-red-600 mt-2">กรุณากรอก Remark</div>
+        </div>
 
-    const r = data.request;
+        <button class="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-bold text-lg transition-colors"
+          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">Submit Reject</button>
 
-    // select type
-    const type = r.leaveType || "";
-    if (type) {
-      const btnMap = { Sick:0, Annual:1, Personal:2, Other:3 };
-      const idx = btnMap[type];
-      const btns = document.querySelectorAll(".type-btn");
-      if (btns && btns[idx]) selectType(btns[idx], type);
+        <button class="w-full bg-slate-100 text-slate-700 py-3.5 rounded-xl font-bold text-lg" onclick="doneAndExit()">Cancel</button>
+      </div>`;
+  }
+
+  async function submitReject_(requestId) {
+    const ta = document.getElementById("rejectRemark");
+    const err = document.getElementById("remarkErr");
+    const remark = (ta?.value || "").trim();
+    if (!remark) {
+      err?.classList.remove("hidden");
+      ta?.classList.add("err");
+      return;
     }
-
-    $('otherSpecify').value = r.otherSpecify || "";
-    $('startDate').value = toDateInputValue_(r.startDate) || $('startDate').value;
-    $('endDate').value = toDateInputValue_(r.endDate) || $('endDate').value;
-
-    const dp = r.dayPart || "Full Day";
-    const durBtns = document.querySelectorAll(".dur-btn");
-    if (dp === "Morning") selectDur(durBtns[1], "Morning");
-    else if (dp === "Afternoon") selectDur(durBtns[2], "Afternoon");
-    else selectDur(durBtns[0], "Full Day");
-
-    $('reason').value = r.reason || "";
-
-    validateOnFly();
-  }
-
-  // ===== Submit Draft (create/update) =====
-  async function handleSubmit() {
-    const type = $('leaveTypeValue').value;
-    const startDate = $('startDate').value;
-    const endDate = $('endDate').value;
-    const reason = $('reason').value.trim();
-    const otherSpec = $('otherSpecify').value.trim();
-
-    if (!type) return alert("Please select Leave Type");
-    if (type === 'Other' && !otherSpec) return alert("Please specify Other type");
-    if (!startDate || !endDate) return alert("Please select dates");
-    if (!reason) return alert("Please specify reason");
-    if (!validateOnFly()) return alert("Please check errors (Red fields).");
-
-    const params = new URLSearchParams(location.search);
-    const mode = params.get("mode");
-    const requestId = (mode === "edit") ? (params.get("requestId") || "") : "";
 
     try {
       showLoader("Submitting...");
-      const btn = $('submitBtn');
-      btn.disabled = true;
+      const profile = await liff.getProfile();
 
       const data = await postFormUrlEncoded_({
-        action: "upsert_draft",
+        action: "reject_leave",
         requestId,
-        userId: userProfile.userId,
-        name: userProfile.displayName,
-        leaveType: type,
-        otherSpecify: otherSpec,
-        startDate,
-        endDate,
-        dayPart: $('durationValue').value || "Full Day",
-        reason
+        actorUserId: profile.userId,
+        remark
       });
 
-      if (!data || !data.ok || !data.requestId) {
+      if (!data || !data.ok) {
         hideLoader();
-        btn.disabled = false;
-        alert("Submit failed: " + (data?.error || "unknown"));
+        alert("Reject failed: " + (data?.error || "unknown"));
         return;
       }
 
-      // ส่ง draft ไปแชทเพื่อให้ bot ตอบ flex + ปุ่ม
-      await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]);
-
+      await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
       hideLoader();
       doneAndExit();
     } catch (e) {
       hideLoader();
-      $('submitBtn').disabled = false;
-      alert("Submit failed: " + (e?.message || e));
+      alert("Reject failed: " + (e?.message || e));
     }
   }
 
@@ -423,41 +166,27 @@
     const mode = params.get("mode");
     const requestId = params.get("requestId");
 
-    // ✅ redirect remark flows to remark.html
-    if ((mode === "reject" || mode === "view_remark") && requestId) {
-      const qs = new URLSearchParams({ mode, requestId }).toString();
-      location.replace("remark.html?" + qs);
+    if (!mode || !requestId) {
+      hideLoader();
+      renderNotFound_();
       return;
     }
 
-    userProfile = await liff.getProfile();
-    $('userGreet').innerHTML = `Hi, <span class="font-bold text-slate-800">${userProfile.displayName}</span>`;
-    if (userProfile.pictureUrl) { $('profileImg').src = userProfile.pictureUrl; $('avatarBox').classList.remove('hidden'); }
-
-    const isEdit = (mode === "edit" && !!requestId);
-
-    // ✅ ตั้งค่า default date/min เฉพาะตอนไม่ใช่ edit
-    if (!isEdit) {
-      const today = new Date().toISOString().split('T')[0];
-      $('startDate').value = today; $('endDate').value = today;
-      $('startDate').setAttribute("min", today);
-      $('endDate').setAttribute("min", today);
-    }
-
-    // ✅ start loading balance/holidays in background
-    const pBalance = fetchLeaveBalance(userProfile.userId);
-    const pHolidays = fetchHolidays();
-
-    // ✅ edit-first
-    if (isEdit) {
-      try { await prefillIfEdit_(); }
-      catch (e) { console.error("Prefill error:", e); }
-    }
-
-    await Promise.allSettled([pBalance, pHolidays]);
-    validateOnFly();
+    let req = null;
+    try {
+      const data = await getRequest_(requestId);
+      if (data && data.ok && data.request) req = data.request;
+    } catch(e) {}
 
     hideLoader();
+
+    if (!req) return renderNotFound_();
+
+    if (mode === "view_remark") return renderViewRemark_(req, requestId);
+    if (mode === "reject") return renderReject_(req, requestId);
+
+    // unknown mode
+    renderNotFound_();
   }
 
   init().catch(err => {
