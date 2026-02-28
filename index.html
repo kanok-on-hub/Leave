@@ -143,7 +143,7 @@
 <script>
   // ======= CONFIG =======
   const LIFF_ID = "2008997153-n5oIYKUP";
-  const API_URL  = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // Apps Script Web App
+  const API_URL  = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // e.g. https://script.google.com/macros/s/.../exec
   // ======================
 
   let companyHolidays = [];
@@ -172,6 +172,7 @@
     document.querySelectorAll('.dur-btn').forEach(b => {
       b.className = "dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700";
       b.disabled = false;
+      b.classList.remove('opacity-40');
     });
     btn.className = "dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-blue-600 ring-1 ring-black/5";
     $('durationValue').value = val;
@@ -201,6 +202,8 @@
           const remaining = Number(b.remaining);
           leaveBalances[key] = isNaN(remaining) ? 0 : remaining;
         });
+      } else {
+        leaveBalances = {};
       }
     } catch (e) {
       leaveBalances = {};
@@ -304,42 +307,40 @@
     return res.json();
   }
 
+  // ✅ Prefill เร็วขึ้น: ไม่คุม loader ในนี้ ให้ init() คุม
   async function prefillIfEdit_() {
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
     const requestId = params.get("requestId");
     if (mode !== "edit" || !requestId) return;
 
-    showLoader("Loading...");
-    try {
-      const data = await getRequest_(requestId);
-      if (!data || !data.ok || !data.request) { hideLoader(); return; }
-      const r = data.request;
+    const data = await getRequest_(requestId);
+    if (!data || !data.ok || !data.request) return;
 
-      // select type
-      const type = r.leaveType || "";
-      if (type) {
-        const btnMap = { Sick:0, Annual:1, Personal:2, Other:3 };
-        const idx = btnMap[type];
-        const btns = document.querySelectorAll(".type-btn");
-        if (btns && btns[idx]) selectType(btns[idx], type);
-      }
-      $('otherSpecify').value = r.otherSpecify || "";
-      $('startDate').value = r.startDate || $('startDate').value;
-      $('endDate').value = r.endDate || $('endDate').value;
+    const r = data.request;
 
-      const dp = r.dayPart || "Full Day";
-      const durBtns = document.querySelectorAll(".dur-btn");
-      if (dp === "Morning") selectDur(durBtns[1], "Morning");
-      else if (dp === "Afternoon") selectDur(durBtns[2], "Afternoon");
-      else selectDur(durBtns[0], "Full Day");
-
-      $('reason').value = r.reason || "";
-
-      validateOnFly();
-    } finally {
-      hideLoader();
+    // select type
+    const type = r.leaveType || "";
+    if (type) {
+      const btnMap = { Sick:0, Annual:1, Personal:2, Other:3 };
+      const idx = btnMap[type];
+      const btns = document.querySelectorAll(".type-btn");
+      if (btns && btns[idx]) selectType(btns[idx], type);
     }
+
+    $('otherSpecify').value = r.otherSpecify || "";
+    $('startDate').value = r.startDate || $('startDate').value;
+    $('endDate').value = r.endDate || $('endDate').value;
+
+    const dp = r.dayPart || "Full Day";
+    const durBtns = document.querySelectorAll(".dur-btn");
+    if (dp === "Morning") selectDur(durBtns[1], "Morning");
+    else if (dp === "Afternoon") selectDur(durBtns[2], "Afternoon");
+    else selectDur(durBtns[0], "Full Day");
+
+    $('reason').value = r.reason || "";
+
+    validateOnFly();
   }
 
   // ===== Submit Draft (create/update) =====
@@ -398,13 +399,15 @@
   }
 
   async function init() {
+    showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
-    // ✅ Redirect remark flows to remark.html (GitHub Pages same folder)
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
     const requestId = params.get("requestId");
+
+    // ✅ redirect remark flows to remark.html (ไฟล์เล็ก โหลดไว)
     if ((mode === "reject" || mode === "view_remark") && requestId) {
       const qs = new URLSearchParams({ mode, requestId }).toString();
       location.replace("remark.html?" + qs);
@@ -415,21 +418,36 @@
     $('userGreet').innerHTML = `Hi, <span class="font-bold text-slate-800">${userProfile.displayName}</span>`;
     if (userProfile.pictureUrl) { $('profileImg').src = userProfile.pictureUrl; $('avatarBox').classList.remove('hidden'); }
 
-    const today = new Date().toISOString().split('T')[0];
-    $('startDate').value = today; $('endDate').value = today;
-    $('startDate').setAttribute("min", today);
-    $('endDate').setAttribute("min", today);
+    const isEdit = (mode === "edit" && !!requestId);
 
-    await fetchLeaveBalance(userProfile.userId);
-    await fetchHolidays();
+    // ✅ ตั้งค่า default date/min เฉพาะตอนไม่ใช่ edit
+    if (!isEdit) {
+      const today = new Date().toISOString().split('T')[0];
+      $('startDate').value = today; $('endDate').value = today;
+      $('startDate').setAttribute("min", today);
+      $('endDate').setAttribute("min", today);
+    }
+
+    // ✅ start loading balance/holidays in background (ไม่ await ทันที)
+    const pBalance = fetchLeaveBalance(userProfile.userId);
+    const pHolidays = fetchHolidays();
+
+    // ✅ edit-first: prefill ก่อน เพื่อให้ user รู้สึกเร็ว
+    if (isEdit) {
+      try { await prefillIfEdit_(); }
+      catch (e) { console.error("Prefill error:", e); }
+    }
+
+    // ✅ รอข้อมูลประกอบ แล้ว validate อีกที
+    await Promise.allSettled([pBalance, pHolidays]);
     validateOnFly();
 
-    await prefillIfEdit_();
     hideLoader();
   }
 
   init().catch(err => {
     console.error(err);
+    hideLoader();
     alert("LIFF init error: " + (err.message || err));
   });
 </script>
