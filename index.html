@@ -1,512 +1,437 @@
 <!doctype html>
-<html lang="th">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
   <title>Leave Request</title>
 
-  <!-- LIFF + Tailwind -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    body { background:#f0f4f8; color:#0f172a; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background:#f0f4f8; color:#1e293b; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #eef2ff; box-shadow: 0 8px 30px rgba(15,23,42,0.06); padding: 1.1rem; }
-    .input { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.9rem; padding:.85rem; width:100%; }
-    .input:focus { outline:none; border-color:#93c5fd; box-shadow:0 0 0 4px rgba(59,130,246,.10); }
-    .label { font-size:.85rem; color:#334155; margin-bottom:.35rem; display:block; }
-    .btn { border-radius: .95rem; padding:.95rem 1rem; font-weight:700; }
-    .btn-primary { background:#111827; color:#fff; }
-    .btn-primary:active { transform: translateY(1px); }
-    .btn-ghost { background:#f1f5f9; color:#0f172a; }
-    .pill { border:1px solid #e2e8f0; background:#f8fafc; border-radius:999px; padding:.25rem .6rem; font-size:.75rem; color:#334155; }
-    .toast {
-      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
-      background: rgba(15, 23, 42, .92); color: #fff; padding: .75rem 1rem;
-      border-radius: 999px; font-size: .85rem; box-shadow: 0 10px 25px rgba(0,0,0,.18);
-      opacity: 0; pointer-events: none; transition: opacity .18s ease;
-      max-width: calc(100% - 28px); text-align: center;
-    }
-    .toast.show { opacity: 1; }
+    .type-btn { width:100%; text-align:left; padding:1rem; border:1px solid transparent; border-radius:1rem; background:#f8fafc; color:#64748b; transition:.2s; position:relative; }
+    .type-btn:active { transform: scale(.98); }
+    .type-btn.selected { border-color:#3b82f6; background:#eff6ff; color:#1d4ed8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:600; }
+    .type-btn.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563eb; }
+    .input { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#334155; }
+    .input:focus { background:#fff; border-color:#3b82f6; box-shadow:0 0 0 4px rgba(59,130,246,.1); }
+    .err { border-color:#ef4444 !important; background-color:#fef2f2 !important; box-shadow:0 0 0 4px rgba(239,68,68,.1) !important; }
+    .info-badge { font-size:11px; font-weight:700; background:#eff6ff; color:#2563eb; padding:4px 12px; border-radius:9999px; border:1px solid #dbeafe; display:inline-flex; align-items:center; white-space:nowrap; }
   </style>
 </head>
 
-<body class="min-h-screen">
-  <div class="max-w-md mx-auto px-4 py-5">
-    <!-- Header -->
-    <div class="mb-4">
-      <div class="flex items-center justify-between">
+<body class="pb-32">
+  <div class="max-w-md mx-auto min-h-screen flex flex-col">
+    <div class="bg-white px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] mb-6 relative z-10">
+      <div class="flex items-center gap-4">
+        <div id="avatarBox" class="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-lg ring-2 ring-blue-50 hidden">
+          <img id="profileImg" src="" class="w-full h-full object-cover">
+        </div>
         <div>
-          <div class="text-xl font-extrabold tracking-tight">ฟอร์มขอลา</div>
-          <div class="text-slate-500 text-sm mt-1" id="subtitle">กรอกข้อมูลให้ครบ แล้วกดส่งคำขอ</div>
-        </div>
-        <span class="pill" id="modePill">Create</span>
-      </div>
-
-      <div class="mt-3 card">
-        <div class="flex items-center justify-between">
-          <div class="text-sm text-slate-600">ผู้ขอลา</div>
-          <div class="text-sm font-bold" id="displayName">-</div>
-        </div>
-        <div class="flex items-center justify-between mt-2">
-          <div class="text-sm text-slate-600">Request ID</div>
-          <div class="text-sm font-mono" id="requestIdText">-</div>
+          <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Leave Request 📝</h1>
+          <p id="userGreet" class="text-slate-500 text-sm font-medium mt-0.5 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
+          </p>
         </div>
       </div>
     </div>
 
-    <!-- Form -->
-    <div class="card space-y-4">
-      <!-- Leave Type -->
-      <div>
-        <label class="label">ประเภทการลา</label>
-        <select class="input" id="leaveType">
-          <option value="">-- เลือก --</option>
-          <option value="Annual">ลาพักร้อน (Annual)</option>
-          <option value="Sick">ลาป่วย (Sick)</option>
-          <option value="Personal">ลากิจ (Personal)</option>
-          <option value="Other">อื่น ๆ (Other)</option>
-        </select>
-        <div class="mt-2 hidden" id="otherWrap">
-          <label class="label">ระบุประเภทอื่น ๆ</label>
-          <input class="input" id="otherSpecify" placeholder="เช่น ลาเพื่อธุระสำคัญ..." />
+    <!-- MAIN FORM UI -->
+    <div class="px-5 space-y-6 flex-1" id="formUI">
+      <div class="space-y-3">
+        <div class="flex justify-between items-center px-1 h-7">
+          <label class="text-sm font-bold text-slate-700">Leave Type <span class="text-red-500">*</span></label>
+          <span id="remainingBox" class="hidden info-badge">Remaining:&nbsp;<span id="remainingValue" class="ml-0.5">-</span></span>
         </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button type="button" onclick="selectType(this,'Sick')" class="type-btn group"><div class="text-2xl mb-1">🤒</div><span class="text-sm font-medium">Sick Leave</span></button>
+          <button type="button" onclick="selectType(this,'Annual')" class="type-btn group"><div class="text-2xl mb-1">🏖️</div><span class="text-sm font-medium">Annual Leave</span></button>
+          <button type="button" onclick="selectType(this,'Personal')" class="type-btn group"><div class="text-2xl mb-1">🚗</div><span class="text-sm font-medium">Personal Leave</span></button>
+          <button type="button" onclick="selectType(this,'Other')" class="type-btn group"><div class="text-2xl mb-1">📝</div><span class="text-sm font-medium">Other</span></button>
+        </div>
+        <input type="hidden" id="leaveTypeValue">
       </div>
 
-      <!-- Date -->
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="label">วันที่เริ่มลา</label>
-          <input class="input" type="date" id="startDate" />
-        </div>
-        <div>
-          <label class="label">วันที่สิ้นสุด</label>
-          <input class="input" type="date" id="endDate" />
-        </div>
+      <div id="otherField" class="hidden space-y-2">
+        <label class="text-sm font-bold text-blue-600 ml-1 italic">Please specify Other type *</label>
+        <input type="text" id="otherSpecify" class="input" placeholder="e.g. Ordination">
       </div>
 
-      <!-- Day part -->
-      <div>
-        <label class="label">ช่วงเวลา</label>
-        <select class="input" id="dayPart">
-          <option value="Full Day">เต็มวัน (Full Day)</option>
-          <option value="Half Day AM">ครึ่งวันเช้า (Half Day AM)</option>
-          <option value="Half Day PM">ครึ่งวันบ่าย (Half Day PM)</option>
-        </select>
-        <div class="text-xs text-slate-500 mt-2" id="halfDayHint">
-          * ครึ่งวันใช้ได้เมื่อเลือกวันเดียวกันเท่านั้น
-        </div>
-      </div>
-
-      <!-- Reason -->
-      <div>
-        <label class="label">เหตุผลการลา</label>
-        <textarea class="input" id="reason" rows="3" placeholder="ระบุเหตุผลโดยย่อ..."></textarea>
-      </div>
-
-      <!-- Summary -->
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div class="flex items-center justify-between">
-          <div class="text-sm font-bold">สรุป</div>
-          <div class="text-xs text-slate-500" id="calcNote">คำนวณอัตโนมัติ</div>
+      <div class="card space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3 h-10">
+          <label class="text-sm font-bold text-slate-700">Date <span class="text-red-500">*</span></label>
+          <span id="dayBadge" class="info-badge hidden">Working: 0 Days</span>
         </div>
 
-        <div class="mt-3 space-y-2 text-sm">
-          <div class="flex justify-between">
-            <div class="text-slate-600">จำนวนวันลา</div>
-            <div class="font-bold" id="leaveDaysText">0</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400">Start Date</div>
+            <input type="date" id="startDate" class="input text-center font-medium" onchange="validateOnFly()">
           </div>
-          <div class="flex justify-between">
-            <div class="text-slate-600">คงเหลือ (Remaining)</div>
-            <div class="font-bold" id="remainingText">-</div>
-          </div>
-          <div class="flex justify-between">
-            <div class="text-slate-600">ผลตรวจสอบ</div>
-            <div class="font-bold" id="validText">-</div>
+          <div class="space-y-1.5">
+            <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400">End Date</div>
+            <input type="date" id="endDate" class="input text-center font-medium" onchange="validateOnFly()">
           </div>
         </div>
 
-        <div class="mt-3 text-xs text-slate-500" id="holidayInfo">
-          * ระบบจะไม่นับวันเสาร์-อาทิตย์ และวันหยุด (ถ้ามีในฐานข้อมูล)
+        <div id="quotaError" class="hidden bg-red-50 border border-red-100 rounded-lg p-3 flex items-start gap-3">
+          <div class="text-red-500 mt-0.5">⚠️</div>
+          <div>
+            <p class="text-xs font-bold text-red-600">Quota Exceeded</p>
+            <p class="text-[10px] text-red-500 leading-tight mt-0.5">
+              You requested <span id="reqDaysDisplay" class="font-bold"></span> days, but you only have
+              <span id="remDaysDisplay" class="font-bold"></span> days remaining.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg">
+          <span class="text-slate-400 mt-0.5">ℹ️</span>
+          <div class="text-[10px] text-slate-500 font-medium leading-relaxed">
+            Weekends & Company Holidays are automatically excluded from the calculation.
+          </div>
         </div>
       </div>
 
-      <!-- Actions -->
-      <div class="grid grid-cols-2 gap-3 pt-1">
-        <button class="btn btn-ghost" id="btnClose" type="button">ปิด</button>
-        <button class="btn btn-primary" id="btnSubmit" type="button">ส่งคำขอ</button>
+      <div class="card space-y-3">
+        <label class="text-sm font-bold text-slate-700 block">Duration <span class="text-red-500">*</span></label>
+        <div class="flex bg-slate-100 p-1.5 rounded-xl gap-1">
+          <button type="button" onclick="selectDur(this,'Full Day')" class="dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-blue-600 ring-1 ring-black/5">Full Day</button>
+          <button type="button" onclick="selectDur(this,'Morning')" class="dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700">Morning</button>
+          <button type="button" onclick="selectDur(this,'Afternoon')" class="dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700">Afternoon</button>
+        </div>
+        <input type="hidden" id="durationValue" value="Full Day">
       </div>
 
-      <div class="text-xs text-slate-500 leading-relaxed">
-        เมื่อกด “ส่งคำขอ” ระบบจะบันทึก Draft แล้วส่งข้อความเข้าแชทอัตโนมัติ เพื่อให้บอทสรุปเป็น Flex ให้ยืนยัน/แก้ไขต่อค่ะ
+      <div class="space-y-2">
+        <label class="text-sm font-bold text-slate-700 ml-1">Reason <span class="text-red-500">*</span></label>
+        <textarea id="reason" rows="3" class="input resize-none" placeholder="Please specify your reason clearly..." oninput="validateOnFly()"></textarea>
+      </div>
+
+      <div class="card bg-slate-50 border border-slate-200">
+        <div class="text-sm font-bold text-slate-700">Attachment</div>
+        <div class="text-xs text-slate-500 mt-1">
+          (ส่งไฟล์แนบในแชทหลังจากบอทแจ้งให้แนบ — ระบบนี้แนบผ่านแชทเท่านั้น)
+        </div>
+        <div class="text-[11px] text-red-500 mt-2">
+          Required if Sick Leave ≥ 3 working days
+        </div>
+      </div>
+    </div>
+
+    <!-- Sticky submit -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
+      <button id="submitBtn" onclick="handleSubmit()"
+        class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-500/30 active:scale-[0.98] transition-all">
+        Submit
+      </button>
+    </div>
+
+    <!-- Loader -->
+    <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
+      <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-[180px]">
+        <div class="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+        <div class="font-bold text-slate-700 text-sm" id="loaderText">Processing...</div>
       </div>
     </div>
   </div>
 
-  <div class="toast" id="toast">Toast</div>
-
 <script>
-/** =========================
- * CONFIG (แก้แค่ 2 จุดนี้)
- * ========================= */
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // Leave Backend Web App URL (doGet/doPost)
-const LIFF_ID = "2008997153-n5oIYKUP"; // ถ้า init ด้วย liffId (optional). ถ้าไม่ใส่จะใช้ liff.init({}) ได้เช่นกัน
+  // ======= CONFIG =======
+  const LIFF_ID = "2008997153-n5oIYKUP";
+  const API_URL  = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // Apps Script Web App
+  // ======================
 
-/** =========================
- * STATE
- * ========================= */
-const state = {
-  mode: "create",     // create | edit
-  requestId: "",
-  userId: "",
-  displayName: "",
-  holidays: new Set(), // yyyy-mm-dd
-  remainingByType: {}, // { Annual: 10, Sick: 30 ... }
-  computedDays: 0,
-  computedRemaining: null,
-  isValid: false,
-  invalidMsg: ""
-};
+  let companyHolidays = [];
+  let userProfile = null;
+  let leaveBalances = {};
 
-/** =========================
- * UTILS
- * ========================= */
-function qs(name) {
-  const url = new URL(location.href);
-  return url.searchParams.get(name) || "";
-}
-function todayISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth()+1).padStart(2,"0");
-  const dd = String(d.getDate()).padStart(2,"0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-function toast(msg) {
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1800);
-}
-function setLoading(isLoading) {
-  const btn = document.getElementById("btnSubmit");
-  btn.disabled = isLoading;
-  btn.style.opacity = isLoading ? "0.65" : "1";
-  btn.textContent = isLoading ? "กำลังส่ง..." : "ส่งคำขอ";
-}
-function isWeekend(dateObj) {
-  const day = dateObj.getDay();
-  return day === 0 || day === 6;
-}
-function toISO(dateObj) {
-  const yyyy = dateObj.getFullYear();
-  const mm = String(dateObj.getMonth()+1).padStart(2,"0");
-  const dd = String(dateObj.getDate()).padStart(2,"0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-function parseISO(s) {
-  // s: yyyy-mm-dd
-  const [y,m,d] = String(s).split("-").map(Number);
-  return new Date(y, (m||1)-1, d||1);
-}
-function clampMinDateInputs() {
-  const min = todayISO();
-  document.getElementById("startDate").setAttribute("min", min);
-  document.getElementById("endDate").setAttribute("min", min);
-}
+  const $ = (id) => document.getElementById(id);
 
-/** =========================
- * BACKEND CALLS
- * ========================= */
-async function backendGet(action, params = {}) {
-  const url = new URL(BACKEND_URL);
-  url.searchParams.set("action", action);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, String(v)));
-  const res = await fetch(url.toString(), { method: "GET" });
-  const json = await res.json();
-  if (!json || json.success !== true) throw new Error((json && json.error) || "Backend error");
-  return json.data;
-}
-async function backendPost(action, payload = {}) {
-  const res = await fetch(BACKEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...payload })
-  });
-  const json = await res.json();
-  if (!json || json.success !== true) throw new Error((json && json.error) || "Backend error");
-  return json.data;
-}
+  function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
+  function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
+  function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
-/** =========================
- * CALC
- * ========================= */
-function getForm() {
-  const leaveType = document.getElementById("leaveType").value.trim();
-  const otherSpecify = document.getElementById("otherSpecify").value.trim();
-  const startDate = document.getElementById("startDate").value;
-  const endDate = document.getElementById("endDate").value;
-  const dayPart = document.getElementById("dayPart").value;
-  const reason = document.getElementById("reason").value.trim();
-  return { leaveType, otherSpecify, startDate, endDate, dayPart, reason };
-}
+  function selectType(btn, val) {
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    $('leaveTypeValue').value = val;
 
-function computeLeaveDays(startISO, endISO, dayPart) {
-  if (!startISO || !endISO) return 0;
-  const s = parseISO(startISO);
-  const e = parseISO(endISO);
-  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
-  if (e < s) return 0;
+    if (val === 'Other') $('otherField').classList.remove('hidden');
+    else { $('otherField').classList.add('hidden'); $('otherSpecify').value = ''; }
 
-  // half day rules
-  if (dayPart !== "Full Day") {
-    if (startISO !== endISO) return 0; // invalid (we'll handle message)
-    // half day counts 0.5 and still should avoid weekend/holiday (if that date is non-working, count 0)
-    const iso = startISO;
-    const isHol = state.holidays.has(iso);
-    const isWk = isWeekend(s);
-    if (isHol || isWk) return 0;
-    return 0.5;
+    updateRemainingUI();
+    validateOnFly();
   }
 
-  // full day count: exclude weekends + holidays
-  let days = 0;
-  let cur = new Date(s.getTime());
-  while (cur <= e) {
-    const iso = toISO(cur);
-    const hol = state.holidays.has(iso);
-    if (!isWeekend(cur) && !hol) days += 1;
-    cur.setDate(cur.getDate() + 1);
+  function selectDur(btn, val) {
+    document.querySelectorAll('.dur-btn').forEach(b => {
+      b.className = "dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700";
+      b.disabled = false;
+    });
+    btn.className = "dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-blue-600 ring-1 ring-black/5";
+    $('durationValue').value = val;
+    validateOnFly();
   }
-  return days;
-}
 
-function validateAndRender() {
-  const f = getForm();
-
-  // show/hide other
-  document.getElementById("otherWrap").classList.toggle("hidden", f.leaveType !== "Other");
-
-  // Remaining
-  const rem = (f.leaveType && state.remainingByType.hasOwnProperty(f.leaveType))
-    ? Number(state.remainingByType[f.leaveType])
-    : null;
-
-  // Calculate
-  const days = computeLeaveDays(f.startDate, f.endDate, f.dayPart);
-  state.computedDays = days;
-  state.computedRemaining = rem;
-
-  // Validation
-  state.isValid = true;
-  state.invalidMsg = "";
-
-  // required fields
-  if (!f.leaveType) { state.isValid = false; state.invalidMsg = "กรุณาเลือกประเภทการลา"; }
-  else if (f.leaveType === "Other" && !f.otherSpecify) { state.isValid = false; state.invalidMsg = "กรุณาระบุประเภทอื่น ๆ"; }
-  else if (!f.startDate || !f.endDate) { state.isValid = false; state.invalidMsg = "กรุณาเลือกวันที่ให้ครบ"; }
-  else if (f.endDate < f.startDate) { state.isValid = false; state.invalidMsg = "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มลา"; }
-  else {
-    // no backdate (hard block)
-    const min = todayISO();
-    if (f.startDate < min || f.endDate < min) {
-      state.isValid = false; state.invalidMsg = "ไม่สามารถเลือกวันย้อนหลังได้";
-    }
-    // half day rule
-    if (f.dayPart !== "Full Day" && f.startDate !== f.endDate) {
-      state.isValid = false; state.invalidMsg = "ครึ่งวันใช้ได้เมื่อเลือกวันเดียวกันเท่านั้น";
-    }
-    // must be > 0 working day
-    if (state.isValid && days <= 0) {
-      state.isValid = false; state.invalidMsg = "ช่วงวันที่เลือกไม่มีวันทำงานที่นับเป็นวันลา";
-    }
-    // remaining check
-    if (state.isValid && rem !== null && !Number.isNaN(rem) && days > rem) {
-      state.isValid = false; state.invalidMsg = "วันลามากกว่าวันคงเหลือ";
-    }
-    // reason required (ถ้าคุณอยากบังคับ)
-    if (state.isValid && !f.reason) {
-      state.isValid = false; state.invalidMsg = "กรุณาระบุเหตุผลการลา";
+  async function fetchHolidays() {
+    try {
+      const res = await fetch(API_URL + "?action=get_holidays&t=" + Date.now());
+      const data = await res.json();
+      companyHolidays = Array.isArray(data) ? data : [];
+    } catch (e) {
+      companyHolidays = [];
     }
   }
 
-  // Render summary
-  document.getElementById("leaveDaysText").textContent = String(days);
-  document.getElementById("remainingText").textContent =
-    (rem === null || Number.isNaN(rem)) ? "-" : String(rem);
+  async function fetchLeaveBalance(userId) {
+    if (!userId) return;
+    try {
+      const res = await fetch(API_URL + "?action=get_balance&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.balances)) {
+        leaveBalances = {};
+        data.balances.forEach(b => {
+          if (!b || !b.type) return;
+          const key = String(b.type);
+          const remaining = Number(b.remaining);
+          leaveBalances[key] = isNaN(remaining) ? 0 : remaining;
+        });
+      }
+    } catch (e) {
+      leaveBalances = {};
+    }
+    updateRemainingUI();
+  }
 
-  document.getElementById("validText").textContent =
-    state.isValid ? "ผ่าน ✅" : (state.invalidMsg ? ("ไม่ผ่าน: " + state.invalidMsg) : "ไม่ผ่าน ❌");
+  function updateRemainingUI() {
+    const type = $('leaveTypeValue').value;
+    const box = $('remainingBox');
+    const valEl = $('remainingValue');
+    if (!type) { box.classList.add('hidden'); return; }
 
-  // enable/disable submit
-  document.getElementById("btnSubmit").disabled = !state.isValid;
-  document.getElementById("btnSubmit").style.opacity = state.isValid ? "1" : "0.55";
-}
+    const remaining = (leaveBalances[type] != null) ? leaveBalances[type] : null;
+    if (remaining == null) box.classList.add('hidden');
+    else {
+      const unit = (remaining === 1) ? "Day" : "Days";
+      valEl.textContent = `${remaining} ${unit}`;
+      box.classList.remove('hidden');
+    }
+  }
 
-/** =========================
- * PREFILL
- * ========================= */
-async function loadInitData() {
-  // Fetch holidays + remaining
-  // Backend should return:
-  // - holidays: ["2026-01-01", ...]
-  // - remainingByType: { Annual: 10, Sick: 30, Personal: 3, Other: 0 }
-  const data = await backendGet("init", { userId: state.userId });
+  function calcWorkingDays(sStr, eStr) {
+    if (!sStr || !eStr) return 0;
+    const s = new Date(sStr);
+    const e = new Date(eStr);
+    if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
 
-  const holidays = Array.isArray(data.holidays) ? data.holidays : [];
-  state.holidays = new Set(holidays.map(String));
+    let total = 0;
+    const cur = new Date(s);
+    while (cur <= e) {
+      const dow = cur.getDay();
+      const isWeekend = (dow === 0 || dow === 6);
+      const dateStr = cur.toISOString().split('T')[0];
+      const isHoliday = Array.isArray(companyHolidays) && companyHolidays.includes(dateStr);
+      if (!isWeekend && !isHoliday) total++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return total;
+  }
 
-  state.remainingByType = (data.remainingByType && typeof data.remainingByType === "object")
-    ? data.remainingByType : {};
+  function validateOnFly() {
+    const type = $('leaveTypeValue').value;
+    const s = $('startDate').value;
+    const e = $('endDate').value;
+    const badge = $('dayBadge');
+    const quotaError = $('quotaError');
 
-  validateAndRender();
-}
+    $('startDate').classList.remove('err');
+    $('endDate').classList.remove('err');
+    quotaError.classList.add('hidden');
 
-async function prefillEdit(requestId) {
-  // Backend should return request object:
-  // { requestId, leaveType, otherSpecify, startDate, endDate, dayPart, reason }
-  const data = await backendGet("get_request", { requestId, userId: state.userId });
+    if (!s || !e) { badge.classList.add('hidden'); return true; }
 
-  state.requestId = String(data.requestId || requestId || "");
-  document.getElementById("requestIdText").textContent = state.requestId || "-";
+    let days = calcWorkingDays(s, e);
 
-  document.getElementById("leaveType").value = String(data.leaveType || "");
-  document.getElementById("otherSpecify").value = String(data.otherSpecify || "");
-  document.getElementById("startDate").value = String(data.startDate || "");
-  document.getElementById("endDate").value = String(data.endDate || "");
-  document.getElementById("dayPart").value = String(data.dayPart || "Full Day");
-  document.getElementById("reason").value = String(data.reason || "");
+    // Auto lock half-day for >1 day
+    const durBtns = document.querySelectorAll('.dur-btn');
+    if (days > 1) {
+      if ($('durationValue').value !== 'Full Day') selectDur(durBtns[0], 'Full Day');
+      durBtns[1].disabled = true; durBtns[2].disabled = true;
+      durBtns[1].classList.add('opacity-40'); durBtns[2].classList.add('opacity-40');
+    } else {
+      durBtns[1].disabled = false; durBtns[2].disabled = false;
+      durBtns[1].classList.remove('opacity-40'); durBtns[2].classList.remove('opacity-40');
+    }
 
-  validateAndRender();
-}
+    const dp = $('durationValue').value || "Full Day";
+    if ((dp === "Morning" || dp === "Afternoon") && days > 0) days -= 0.5;
 
-/** =========================
- * SUBMIT (save draft + send text to chat)
- * ========================= */
-async function submitDraft() {
-  try {
-    setLoading(true);
+    const unit = (days === 1) ? "Day" : "Days";
+    badge.textContent = `Working: ${days} ${unit}`;
+    badge.classList.remove('hidden');
 
-    const f = getForm();
-    validateAndRender();
-    if (!state.isValid) {
-      toast(state.invalidMsg || "กรอกข้อมูลไม่ครบ");
+    // Remaining rule
+    const remaining = (type && leaveBalances[type] != null) ? leaveBalances[type] : null;
+    if (type && remaining != null && days > 0 && days > remaining) {
+      $('startDate').classList.add('err');
+      $('endDate').classList.add('err');
+      $('reqDaysDisplay').textContent = days;
+      $('remDaysDisplay').textContent = remaining;
+      quotaError.classList.remove('hidden');
+      return false;
+    }
+    return true;
+  }
+
+  async function postFormUrlEncoded_(obj) {
+    const body = new URLSearchParams();
+    Object.keys(obj || {}).forEach(k => body.set(k, obj[k] == null ? "" : String(obj[k])));
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: body.toString()
+    });
+    return res.json();
+  }
+
+  async function getRequest_(requestId) {
+    const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
+    return res.json();
+  }
+
+  async function prefillIfEdit_() {
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode");
+    const requestId = params.get("requestId");
+    if (mode !== "edit" || !requestId) return;
+
+    showLoader("Loading...");
+    try {
+      const data = await getRequest_(requestId);
+      if (!data || !data.ok || !data.request) { hideLoader(); return; }
+      const r = data.request;
+
+      // select type
+      const type = r.leaveType || "";
+      if (type) {
+        const btnMap = { Sick:0, Annual:1, Personal:2, Other:3 };
+        const idx = btnMap[type];
+        const btns = document.querySelectorAll(".type-btn");
+        if (btns && btns[idx]) selectType(btns[idx], type);
+      }
+      $('otherSpecify').value = r.otherSpecify || "";
+      $('startDate').value = r.startDate || $('startDate').value;
+      $('endDate').value = r.endDate || $('endDate').value;
+
+      const dp = r.dayPart || "Full Day";
+      const durBtns = document.querySelectorAll(".dur-btn");
+      if (dp === "Morning") selectDur(durBtns[1], "Morning");
+      else if (dp === "Afternoon") selectDur(durBtns[2], "Afternoon");
+      else selectDur(durBtns[0], "Full Day");
+
+      $('reason').value = r.reason || "";
+
+      validateOnFly();
+    } finally {
+      hideLoader();
+    }
+  }
+
+  // ===== Submit Draft (create/update) =====
+  async function handleSubmit() {
+    const type = $('leaveTypeValue').value;
+    const startDate = $('startDate').value;
+    const endDate = $('endDate').value;
+    const reason = $('reason').value.trim();
+    const otherSpec = $('otherSpecify').value.trim();
+
+    if (!type) return alert("Please select Leave Type");
+    if (type === 'Other' && !otherSpec) return alert("Please specify Other type");
+    if (!startDate || !endDate) return alert("Please select dates");
+    if (!reason) return alert("Please specify reason");
+    if (!validateOnFly()) return alert("Please check errors (Red fields).");
+
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode");
+    const requestId = (mode === "edit") ? (params.get("requestId") || "") : "";
+
+    try {
+      showLoader("Submitting...");
+      const btn = $('submitBtn');
+      btn.disabled = true;
+
+      const data = await postFormUrlEncoded_({
+        action: "upsert_draft",
+        requestId,
+        userId: userProfile.userId,
+        name: userProfile.displayName,
+        leaveType: type,
+        otherSpecify: otherSpec,
+        startDate,
+        endDate,
+        dayPart: $('durationValue').value || "Full Day",
+        reason
+      });
+
+      if (!data || !data.ok || !data.requestId) {
+        hideLoader();
+        btn.disabled = false;
+        alert("Submit failed: " + (data?.error || "unknown"));
+        return;
+      }
+
+      // ส่ง draft ไปแชทเพื่อให้ bot ตอบ flex + ปุ่ม
+      await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]);
+
+      hideLoader();
+      doneAndExit();
+    } catch (e) {
+      hideLoader();
+      $('submitBtn').disabled = false;
+      alert("Submit failed: " + (e?.message || e));
+    }
+  }
+
+  async function init() {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+
+    // ✅ Redirect remark flows to remark.html (GitHub Pages same folder)
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode");
+    const requestId = params.get("requestId");
+    if ((mode === "reject" || mode === "view_remark") && requestId) {
+      const qs = new URLSearchParams({ mode, requestId }).toString();
+      location.replace("remark.html?" + qs);
       return;
     }
 
-    const payload = {
-      requestId: state.requestId || "",   // empty => backend creates new
-      userId: state.userId,
-      displayName: state.displayName,
-      leaveType: f.leaveType,
-      otherSpecify: f.otherSpecify,
-      startDate: f.startDate,
-      endDate: f.endDate,
-      dayPart: f.dayPart,
-      reason: f.reason,
-      leaveDays: state.computedDays
-    };
+    userProfile = await liff.getProfile();
+    $('userGreet').innerHTML = `Hi, <span class="font-bold text-slate-800">${userProfile.displayName}</span>`;
+    if (userProfile.pictureUrl) { $('profileImg').src = userProfile.pictureUrl; $('avatarBox').classList.remove('hidden'); }
 
-    // Backend should return { requestId }
-    const data = await backendPost("save_draft", payload);
-    const rid = String(data.requestId || "");
+    const today = new Date().toISOString().split('T')[0];
+    $('startDate').value = today; $('endDate').value = today;
+    $('startDate').setAttribute("min", today);
+    $('endDate').setAttribute("min", today);
 
-    if (!rid) throw new Error("No requestId returned");
+    await fetchLeaveBalance(userProfile.userId);
+    await fetchHolidays();
+    validateOnFly();
 
-    state.requestId = rid;
-    document.getElementById("requestIdText").textContent = rid;
+    await prefillIfEdit_();
+    hideLoader();
+  }
 
-    // Send text to chat so Bot can reply Flex Draft
-    const text = `LEAVE_DRAFT:${rid}`;
-    await liff.sendMessages([{ type: "text", text }]);
-
-    toast("ส่งคำขอแล้ว ✅");
-    setTimeout(() => liff.closeWindow(), 350);
-
-  } catch (err) {
+  init().catch(err => {
     console.error(err);
-    toast("เกิดข้อผิดพลาดในการส่งคำขอ");
-  } finally {
-    setLoading(false);
-  }
-}
-
-/** =========================
- * LIFF INIT
- * ========================= */
-async function init() {
-  // UI min date (no backdate)
-  clampMinDateInputs();
-
-  // read mode + requestId from query
-  const mode = (qs("mode") || "create").toLowerCase();
-  const requestId = qs("requestId");
-
-  state.mode = (mode === "edit") ? "edit" : "create";
-  document.getElementById("modePill").textContent = state.mode === "edit" ? "Edit" : "Create";
-  document.getElementById("subtitle").textContent =
-    state.mode === "edit" ? "แก้ไขข้อมูล แล้วกดส่งคำขอ" : "สร้างคำขอใหม่ แล้วกดส่งคำขอ";
-
-  // init LIFF
-  if (LIFF_ID && LIFF_ID !== "PUT_YOUR_LIFF_ID_HERE") {
-    await liff.init({ liffId: LIFF_ID });
-  } else {
-    await liff.init({}); // ใช้ได้ถ้าผูก LIFF ถูกต้อง
-  }
-
-  if (!liff.isLoggedIn()) {
-    liff.login({ redirectUri: location.href });
-    return;
-  }
-
-  // profile
-  const profile = await liff.getProfile();
-  state.userId = profile.userId;
-  state.displayName = profile.displayName || "-";
-  document.getElementById("displayName").textContent = state.displayName;
-
-  // requestId text (edit shows id; create shows - until saved)
-  if (state.mode === "edit" && requestId) {
-    state.requestId = requestId;
-    document.getElementById("requestIdText").textContent = requestId;
-  } else {
-    document.getElementById("requestIdText").textContent = "-";
-  }
-
-  // fetch init data
-  await loadInitData();
-
-  // prefill if edit
-  if (state.mode === "edit" && requestId) {
-    await prefillEdit(requestId);
-  }
-
-  // bind listeners
-  bindEvents();
-  validateAndRender();
-}
-
-function bindEvents() {
-  const ids = ["leaveType","otherSpecify","startDate","endDate","dayPart","reason"];
-  ids.forEach(id => {
-    document.getElementById(id).addEventListener("input", validateAndRender);
-    document.getElementById(id).addEventListener("change", validateAndRender);
+    alert("LIFF init error: " + (err.message || err));
   });
-
-  document.getElementById("btnClose").addEventListener("click", () => {
-    try { liff.closeWindow(); } catch(e) { window.close(); }
-  });
-
-  document.getElementById("btnSubmit").addEventListener("click", submitDraft);
-}
-
-/** =========================
- * START
- * ========================= */
-init().catch(err => {
-  console.error(err);
-  toast("เปิดฟอร์มไม่สำเร็จ");
-});
 </script>
 </body>
 </html>
