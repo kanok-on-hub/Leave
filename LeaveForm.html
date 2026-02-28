@@ -2,687 +2,208 @@
 <html lang="th">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0,viewport-fit=cover" />
   <title>Leave Request</title>
-
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-  <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background:#f0f4f8; color:#1e293b; -webkit-tap-highlight-color: transparent; }
-    ::-webkit-scrollbar { width: 0px; background: transparent; }
-
-    .card {
-      background: #ffffff;
-      border-radius: 1.25rem;
-      box-shadow: 0 4px 20px -2px rgba(226, 232, 240, 0.6);
-      border: 1px solid #f1f5f9;
-      padding: 1.25rem;
-    }
-
-    .type-btn {
-      width: 100%; text-align: left; padding: 1rem;
-      border: 1px solid transparent; border-radius: 1rem;
-      background: #f8fafc; color: #64748b;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative; overflow: hidden;
-    }
-    .type-btn:active { transform: scale(0.98); }
-    .type-btn.selected {
-      border-color: #3b82f6; background: #eff6ff; color: #1d4ed8;
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15); font-weight: 700;
-    }
-    .type-btn.selected::after {
-      content: '✓'; position: absolute; top: 8px; right: 10px; font-size: 12px; color: #2563eb;
-    }
-
-    .input {
-      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem;
-      padding: 0.875rem; width: 100%; outline: none; transition: all 0.2s;
-      font-size: 0.95rem; color: #334155;
-    }
-    .input:focus {
-      background: #ffffff; border-color: #3b82f6;
-      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
-    }
-    .err {
-      border-color: #ef4444 !important; background-color: #fef2f2 !important;
-      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1) !important;
-    }
-
-    .info-badge{
-      font-size: 11px; font-weight: 800;
-      background-color:#eff6ff; color:#2563eb;
-      padding:4px 12px; border-radius:9999px;
-      border:1px solid #dbeafe;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-      display:inline-flex; align-items:center; white-space:nowrap;
-    }
-
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-    .fade-in { animation: fadeIn 0.25s ease-out; }
-  </style>
 </head>
+<body class="bg-slate-100">
+  <div class="max-w-md mx-auto p-5 space-y-4">
+    <div class="bg-white rounded-2xl p-5 shadow">
+      <div class="text-xl font-extrabold text-slate-800">Leave Request 📝</div>
+      <div id="hello" class="text-sm text-slate-500 mt-1">Loading...</div>
+    </div>
 
-<body class="pb-32">
-<div class="max-w-md mx-auto min-h-screen flex flex-col">
-
-  <!-- Header -->
-  <div class="bg-white px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] mb-6 relative z-10">
-    <div class="flex items-center gap-4">
-      <div id="avatarBox" class="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-lg ring-2 ring-blue-50 hidden">
-        <img id="profileImg" src="" class="w-full h-full object-cover">
-      </div>
+    <div class="bg-white rounded-2xl p-5 shadow space-y-4">
       <div>
-        <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Leave Request 📝</h1>
-        <p id="userGreet" class="text-slate-500 text-sm font-medium mt-0.5 flex items-center gap-1">
-          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
-        </p>
-        <p id="modeHint" class="text-[11px] text-slate-400 font-semibold mt-1 hidden"></p>
-      </div>
-    </div>
-  </div>
-
-  <div class="px-5 space-y-6 flex-1" id="formUI">
-
-    <!-- Leave Type -->
-    <div class="space-y-3">
-      <div class="flex justify-between items-center px-1 h-7">
-        <label class="text-sm font-bold text-slate-700">Leave Type <span class="text-red-500">*</span></label>
-        <span id="remainingBox" class="hidden info-badge fade-in">
-          Remaining:&nbsp;<span id="remainingValue" class="ml-0.5">-</span>
-        </span>
-      </div>
-
-      <div class="grid grid-cols-2 gap-3">
-        <button type="button" onclick="selectType(this,'Sick')" class="type-btn group">
-          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">🤒</div>
-          <span class="text-sm font-medium">Sick Leave</span>
-        </button>
-        <button type="button" onclick="selectType(this,'Annual')" class="type-btn group">
-          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">🏖️</div>
-          <span class="text-sm font-medium">Annual Leave</span>
-        </button>
-        <button type="button" onclick="selectType(this,'Personal')" class="type-btn group">
-          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">🚗</div>
-          <span class="text-sm font-medium">Personal Leave</span>
-        </button>
-        <button type="button" onclick="selectType(this,'Other')" class="type-btn group">
-          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">📝</div>
-          <span class="text-sm font-medium">Other</span>
-        </button>
-      </div>
-      <input type="hidden" id="leaveTypeValue">
-    </div>
-
-    <!-- OtherSpecify -->
-    <div id="otherField" class="hidden space-y-2 fade-in">
-      <label class="text-sm font-bold text-blue-600 ml-1 italic">Please specify Other type *</label>
-      <input type="text" id="otherSpecify" class="input" placeholder="e.g. Ordination" oninput="validateOnFly()">
-    </div>
-
-    <!-- Date + days -->
-    <div class="card space-y-4">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3 h-10">
-        <label class="text-sm font-bold text-slate-700">Date <span class="text-red-500">*</span></label>
-        <span id="dayBadge" class="info-badge hidden">Working: 0 Days</span>
-      </div>
-
-      <div class="grid grid-cols-2 gap-4">
-        <div class="space-y-1.5">
-          <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400">Start Date</div>
-          <input type="date" id="startDate" class="input text-center text-slate-700 font-semibold cursor-pointer" onchange="validateOnFly()">
+        <div class="text-sm font-bold text-slate-700 mb-2">Leave Type *</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="typeBtn px-4 py-3 rounded-xl bg-slate-50" onclick="pickType('Sick')">🤒 Sick</button>
+          <button class="typeBtn px-4 py-3 rounded-xl bg-slate-50" onclick="pickType('Annual')">🏖️ Annual</button>
+          <button class="typeBtn px-4 py-3 rounded-xl bg-slate-50" onclick="pickType('Personal')">🚗 Personal</button>
+          <button class="typeBtn px-4 py-3 rounded-xl bg-slate-50" onclick="pickType('Other')">📝 Other</button>
         </div>
-        <div class="space-y-1.5">
-          <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400">End Date</div>
-          <input type="date" id="endDate" class="input text-center text-slate-700 font-semibold cursor-pointer" onchange="validateOnFly()">
+        <input type="hidden" id="leaveType" />
+      </div>
+
+      <div id="otherBox" class="hidden">
+        <div class="text-sm font-bold text-slate-700 mb-2">Other Specify *</div>
+        <input id="otherSpecify" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200" placeholder="เช่น อุปสมบท" />
+      </div>
+
+      <div>
+        <div class="text-sm font-bold text-slate-700 mb-2">Date *</div>
+        <div class="grid grid-cols-2 gap-2">
+          <input id="startDate" type="date" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200" onchange="recalc()" />
+          <input id="endDate" type="date" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200" onchange="recalc()" />
+        </div>
+        <div class="text-xs text-slate-500 mt-2">
+          Working days: <span id="days" class="font-bold">0</span>
         </div>
       </div>
 
-      <!-- Quota exceeded -->
-      <div id="quotaError" class="hidden bg-red-50 border border-red-100 rounded-lg p-3 flex items-start gap-3">
-        <div class="text-red-500 mt-0.5">⚠️</div>
-        <div>
-          <p class="text-xs font-bold text-red-600">Quota Exceeded</p>
-          <p class="text-[10px] text-red-500 leading-tight mt-0.5">
-            You requested <span id="reqDaysDisplay" class="font-bold"></span> days, but you only have <span id="remDaysDisplay" class="font-bold"></span> days remaining.
-          </p>
+      <div>
+        <div class="text-sm font-bold text-slate-700 mb-2">Duration *</div>
+        <div class="flex gap-2">
+          <button class="durBtn flex-1 px-4 py-3 rounded-xl bg-slate-900 text-white" onclick="pickDur('Full Day')">Full</button>
+          <button class="durBtn flex-1 px-4 py-3 rounded-xl bg-slate-50" onclick="pickDur('Morning')">Morning</button>
+          <button class="durBtn flex-1 px-4 py-3 rounded-xl bg-slate-50" onclick="pickDur('Afternoon')">Afternoon</button>
         </div>
+        <input type="hidden" id="dayPart" value="Full Day"/>
       </div>
 
-      <!-- Sick >= 3 info -->
-      <div id="sickAttachInfo" class="hidden bg-amber-50 border border-amber-100 rounded-lg p-3 flex items-start gap-3">
-        <div class="text-amber-600 mt-0.5">📎</div>
-        <div>
-          <p class="text-xs font-bold text-amber-700">Medical Certificate Required</p>
-          <p class="text-[10px] text-amber-700 leading-tight mt-0.5">
-            Sick Leave ≥ 3 working days: please send a photo/PDF in the chat after creating draft.
-          </p>
-        </div>
+      <div>
+        <div class="text-sm font-bold text-slate-700 mb-2">Reason *</div>
+        <textarea id="reason" rows="3" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200" placeholder="กรอกเหตุผล"></textarea>
       </div>
 
-      <div class="flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg">
-        <span class="text-slate-400 mt-0.5">ℹ️</span>
-        <div class="text-[10px] text-slate-500 font-medium leading-relaxed">
-          Weekends & Company Holidays are automatically excluded from the calculation.
-        </div>
+      <div class="text-xs text-slate-500">
+        * หมายเหตุ: ถ้าลาป่วย ≥ 3 วัน ระบบจะให้ส่งรูป/ไฟล์ในแชทก่อนยืนยัน
       </div>
     </div>
 
-    <!-- Duration -->
-    <div class="card space-y-3">
-      <label class="text-sm font-bold text-slate-700 block">Duration <span class="text-red-500">*</span></label>
-      <div class="flex bg-slate-100 p-1.5 rounded-xl gap-1">
-        <button type="button" onclick="selectDur(this,'Full Day')" class="dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-blue-600 ring-1 ring-black/5">Full Day</button>
-        <button type="button" onclick="selectDur(this,'Morning')" class="dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700">Morning</button>
-        <button type="button" onclick="selectDur(this,'Afternoon')" class="dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700">Afternoon</button>
-      </div>
-      <input type="hidden" id="durationValue" value="Full Day">
-    </div>
-
-    <!-- Reason -->
-    <div class="space-y-2">
-      <label class="text-sm font-bold text-slate-700 ml-1">Reason <span class="text-red-500">*</span></label>
-      <textarea id="reason" rows="3" class="input resize-none" placeholder="Please specify your reason clearly..." oninput="validateOnFly()"></textarea>
-    </div>
-
-    <!-- Helper: protocol -->
-    <div class="card bg-slate-50 border-slate-100">
-      <div class="text-xs font-bold text-slate-700">How it works</div>
-      <div class="text-[11px] text-slate-500 mt-1 leading-relaxed">
-        When you submit, the system will create a <b>Draft</b> and send a message to the chat.<br/>
-        The bot will reply with a summary card and buttons to <b>Confirm</b> or <b>Edit</b>.
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Bottom bar -->
-  <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40">
-    <button id="submitBtn" onclick="handleSubmit()" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-500/30 active:scale-[0.98] transition-all">
-      Submit
+    <button id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow" onclick="submitDraft()">
+      Submit (Draft)
     </button>
-  </div>
-</div>
 
-<!-- Loader -->
-<div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50 transition-opacity">
-  <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-[220px]">
-    <div class="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-    <div class="font-bold text-slate-700 text-sm text-center" id="loaderText">Processing...</div>
-    <div class="text-[11px] text-slate-500 mt-2 text-center" id="loaderSub"></div>
+    <div id="msg" class="text-xs text-slate-500 text-center"></div>
   </div>
-</div>
-
-<!-- Success Modal -->
-<div id="successModal" class="fixed inset-0 hidden items-center justify-center z-[999] p-4">
-  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
-  <div class="relative w-full max-w-sm bg-white rounded-[2rem] p-8 shadow-2xl text-center transform transition-all scale-100">
-    <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-      <span class="text-4xl">✅</span>
-    </div>
-    <h2 class="text-2xl font-extrabold text-slate-800 mb-2" id="successTitle">Draft created</h2>
-    <p class="text-slate-500 text-sm mb-4 leading-relaxed" id="successDesc">
-      We will send your draft to the chat now.
-    </p>
-    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-left">
-      <div class="text-[11px] text-slate-500 font-bold">Message sent to chat</div>
-      <div class="mt-1 text-sm font-extrabold text-slate-800" id="draftMsgPreview">LEAVE_DRAFT:...</div>
-    </div>
-
-    <button type="button"
-      class="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20 mt-6"
-      onclick="doneAndExit()">
-      Close
-    </button>
-  </div>
-</div>
 
 <script>
-  /** ===================== CONFIG ===================== **/
+  // ====== CONFIG ======
   const LIFF_ID = "2008997153-n5oIYKUP";
-  const API_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // e.g. https://script.google.com/macros/s/....../exec
+  const API_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec"; // same GAS deployment
+  const DRAFT_PREFIX = "LEAVE_DRAFT:";
+  // ====================
 
-  // business rule (ต้องตรงกับ bot)
-  const SICK_ATTACH_MIN_DAYS = 3;
+  let profile = null;
+  let holidays = [];
+  let balances = {};
 
-  /** ===================== STATE ===================== **/
-  let companyHolidays = [];
-  let userProfile = null;
-  let leaveBalances = {};
-  let mode = "create";            // create | edit
-  let editingRequestId = "";      // requestId when edit
-  let lastComputedDays = 0;
+  const $ = (id)=>document.getElementById(id);
 
-  const $ = (id) => document.getElementById(id);
+  function setMsg(t){ $("msg").textContent = t || ""; }
 
-  function showLoader(msg, sub){
-    $("loaderText").textContent = msg || "Processing...";
-    $("loaderSub").textContent = sub || "";
-    $("loader").classList.remove("hidden");
-    $("loader").classList.add("flex");
-  }
-  function hideLoader(){
-    $("loader").classList.add("hidden");
-    $("loader").classList.remove("flex");
+  function pickType(t){
+    $("leaveType").value = t;
+    document.querySelectorAll(".typeBtn").forEach(b=>b.className="typeBtn px-4 py-3 rounded-xl bg-slate-50");
+    event.target.className="typeBtn px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 font-bold";
+
+    if(t==="Other") $("otherBox").classList.remove("hidden");
+    else { $("otherBox").classList.add("hidden"); $("otherSpecify").value=""; }
+    recalc();
   }
 
-  function openSuccessModal(title, desc, msgPreview) {
-    $("successTitle").textContent = title || "Saved";
-    $("successDesc").textContent = desc || "";
-    $("draftMsgPreview").textContent = msgPreview || "";
-    $("successModal").classList.remove("hidden");
-    $("successModal").classList.add("flex");
+  function pickDur(d){
+    $("dayPart").value = d;
+    document.querySelectorAll(".durBtn").forEach(b=>b.className="durBtn flex-1 px-4 py-3 rounded-xl bg-slate-50");
+    event.target.className="durBtn flex-1 px-4 py-3 rounded-xl bg-slate-900 text-white";
+    recalc();
   }
 
-  function doneAndExit() {
-    try { liff.closeWindow(); } catch(e) {
-      $("successModal").classList.add("hidden");
-      $("successModal").classList.remove("flex");
-    }
+  async function fetchHolidays(){
+    const res = await fetch(API_URL + "?action=get_holidays&t=" + Date.now());
+    const data = await res.json();
+    holidays = Array.isArray(data) ? data : [];
   }
 
-  function uuidv4() {
-    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
-      const r = (crypto.getRandomValues(new Uint8Array(1))[0] & 15);
-      const v = c === "x" ? r : (r & 3) | 8;
-      return v.toString(16);
-    });
-  }
-
-  /** ===================== UI Actions ===================== **/
-  function selectType(btn, val) {
-    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    $('leaveTypeValue').value = val;
-
-    if (val === 'Other') $('otherField').classList.remove('hidden');
-    else { $('otherField').classList.add('hidden'); $('otherSpecify').value = ''; }
-
-    updateRemainingUI();
-    validateOnFly();
-  }
-
-  function selectDur(btn, val) {
-    document.querySelectorAll('.dur-btn').forEach(b => {
-      b.className = "dur-btn flex-1 py-2.5 text-sm font-medium text-slate-500 hover:text-slate-700";
-      b.disabled = false;
-    });
-    btn.className = "dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-blue-600 ring-1 ring-black/5";
-    $('durationValue').value = val;
-    validateOnFly();
-  }
-
-  /** ===================== API Helpers ===================== **/
-  async function apiGet(url) {
-    const res = await fetch(url, { method: "GET" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return await res.json();
-  }
-
-  async function apiPostForm(payloadObj) {
-    // x-www-form-urlencoded (ง่ายสุดกับ GAS)
-    const body = new URLSearchParams(payloadObj);
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body
-    });
-    // backend ควรคืน JSON
-    const text = await res.text();
-    try { return JSON.parse(text); } catch(e) { throw new Error("Non-JSON response: " + text.slice(0,200)); }
-  }
-
-  /** ===================== Fetch data ===================== **/
-  async function fetchHolidays() {
-    try {
-      const data = await apiGet(API_URL + "?action=get_holidays&t=" + Date.now());
-      companyHolidays = Array.isArray(data) ? data : [];
-    } catch (e) {
-      companyHolidays = [];
-      console.warn("Holiday fetch failed", e);
-    }
-  }
-
-  async function fetchLeaveBalance(userId) {
-    if (!userId) return;
-    try {
-      const data = await apiGet(API_URL + "?action=get_balance&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
-      if (data && data.ok && Array.isArray(data.balances)) {
-        leaveBalances = {};
-        data.balances.forEach(b => {
-          if (!b || !b.type) return;
-          const key = String(b.type);
-          const remaining = Number(b.remaining);
-          leaveBalances[key] = isNaN(remaining) ? 0 : remaining;
-        });
-      }
-    } catch (e) {
-      leaveBalances = {};
-      console.warn("fetchLeaveBalance failed", e);
-    }
-    updateRemainingUI();
-  }
-
-  async function fetchRequestForEdit(requestId) {
-    // backend ต้องมี action=get_request
-    const data = await apiGet(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
-    if (!data || !data.ok || !data.request) throw new Error("Request not found");
-    return data.request;
-  }
-
-  /** ===================== Logic ===================== **/
-  function calcWorkingDays(sStr, eStr) {
-    if (!sStr || !eStr) return 0;
-    const s = new Date(sStr);
-    const e = new Date(eStr);
-    if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
-
-    let total = 0;
-    const cur = new Date(s);
-    while (cur <= e) {
+  function calcWorkingDays(sStr, eStr){
+    if(!sStr || !eStr) return 0;
+    const s = new Date(sStr), e = new Date(eStr);
+    if(isNaN(s.getTime()) || isNaN(e.getTime()) || s>e) return 0;
+    let total=0; const cur=new Date(s);
+    while(cur<=e){
       const dow = cur.getDay();
-      const isWeekend = (dow === 0 || dow === 6);
-      const dateStr = cur.toISOString().split('T')[0];
-      const isHoliday = Array.isArray(companyHolidays) && companyHolidays.includes(dateStr);
-      if (!isWeekend && !isHoliday) total++;
-      cur.setDate(cur.getDate() + 1);
+      const iso = cur.toISOString().split("T")[0];
+      const isWeekend = dow===0 || dow===6;
+      const isHoliday = holidays.includes(iso);
+      if(!isWeekend && !isHoliday) total++;
+      cur.setDate(cur.getDate()+1);
     }
+    const dp = $("dayPart").value || "Full Day";
+    if((dp==="Morning"||dp==="Afternoon") && total>0) total -= 0.5;
     return total;
   }
 
-  function updateRemainingUI() {
-    const type = $('leaveTypeValue').value;
-    const box = $('remainingBox');
-    const valEl = $('remainingValue');
-
-    if (!type) { box.classList.add('hidden'); return; }
-    const remaining = (leaveBalances[type] != null) ? leaveBalances[type] : null;
-
-    if (remaining == null) {
-      box.classList.add('hidden');
-    } else {
-      const unit = (remaining === 1) ? "Day" : "Days";
-      valEl.textContent = `${remaining} ${unit}`;
-      box.classList.remove('hidden');
-    }
+  function recalc(){
+    const s = $("startDate").value;
+    const e = $("endDate").value;
+    $("days").textContent = calcWorkingDays(s,e);
   }
 
-  function updateSickAttachInfoUI(type, days) {
-    const el = $("sickAttachInfo");
-    if (type === "Sick" && days >= SICK_ATTACH_MIN_DAYS) {
-      el.classList.remove("hidden");
-    } else {
-      el.classList.add("hidden");
-    }
-  }
+  async function submitDraft(){
+    const leaveType = $("leaveType").value;
+    const otherSpecify = $("otherSpecify").value.trim();
+    const startDate = $("startDate").value;
+    const endDate = $("endDate").value;
+    const dayPart = $("dayPart").value;
+    const reason = $("reason").value.trim();
 
-  function validateOnFly() {
-    const type = $('leaveTypeValue').value;
-    const s = $('startDate').value;
-    const e = $('endDate').value;
-    const badge = $('dayBadge');
-    const quotaError = $('quotaError');
+    if(!leaveType) return alert("Please select Leave Type");
+    if(leaveType==="Other" && !otherSpecify) return alert("Please specify Other");
+    if(!startDate || !endDate) return alert("Please select dates");
+    if(!reason) return alert("Please fill reason");
 
-    // reset
-    $('startDate').classList.remove('err');
-    $('endDate').classList.remove('err');
-    $('otherSpecify').classList.remove('err');
-    quotaError.classList.add('hidden');
+    const leaveDays = calcWorkingDays(startDate,endDate);
 
-    // other specify required
-    if (type === "Other" && !$('otherSpecify').value.trim()) {
-      // don't block until submit, but show error if already selected
-      $('otherSpecify').classList.add('err');
-    }
+    $("submitBtn").disabled = true;
+    $("submitBtn").textContent = "Submitting...";
+    setMsg("Creating draft...");
 
-    if (!s || !e) { badge.classList.add('hidden'); updateSickAttachInfoUI(type, 0); return true; }
-    if (!Array.isArray(companyHolidays) || companyHolidays.length === 0) {
-      badge.textContent = "Loading...";
-      badge.classList.remove('hidden');
-      updateSickAttachInfoUI(type, 0);
-      return true;
-    }
-
-    let days = calcWorkingDays(s, e);
-
-    // lock half-day for multi-day
-    const durBtns = document.querySelectorAll('.dur-btn');
-    if (days > 1) {
-      if ($('durationValue').value !== 'Full Day') selectDur(durBtns[0], 'Full Day');
-      durBtns[1].disabled = true;
-      durBtns[2].disabled = true;
-      durBtns[1].classList.add('opacity-40', 'cursor-not-allowed', 'bg-slate-50');
-      durBtns[2].classList.add('opacity-40', 'cursor-not-allowed', 'bg-slate-50');
-    } else {
-      durBtns[1].disabled = false;
-      durBtns[2].disabled = false;
-      durBtns[1].classList.remove('opacity-40', 'cursor-not-allowed', 'bg-slate-50');
-      durBtns[2].classList.remove('opacity-40', 'cursor-not-allowed', 'bg-slate-50');
-    }
-
-    // half-day
-    const dp = $('durationValue').value || "Full Day";
-    if ((dp === "Morning" || dp === "Afternoon") && days > 0) days -= 0.5;
-
-    lastComputedDays = days;
-
-    const unit = (days === 1) ? "Day" : "Days";
-    badge.textContent = `Working: ${days} ${unit}`;
-    badge.classList.remove('hidden');
-
-    // Sick >= 3 info
-    updateSickAttachInfoUI(type, days);
-
-    // quota check
-    const remaining = (type && leaveBalances[type] != null) ? leaveBalances[type] : null;
-    if (type && remaining != null && days > 0 && days > remaining) {
-      $('startDate').classList.add('err');
-      $('endDate').classList.add('err');
-      $('reqDaysDisplay').textContent = days;
-      $('remDaysDisplay').textContent = remaining;
-      quotaError.classList.remove('hidden');
-      return false;
-    }
-
-    return true;
-  }
-
-  /** ===================== Submit (Create/Update Draft) ===================== **/
-  async function handleSubmit() {
-    const type = $('leaveTypeValue').value;
-    const startDate = $('startDate').value;
-    const endDate = $('endDate').value;
-    const reason = $('reason').value.trim();
-    const otherSpec = $('otherSpecify').value.trim();
-    const dayPart = $('durationValue').value || "Full Day";
-
-    if (!type) { alert("Please select Leave Type"); return; }
-    if (type === 'Other' && !otherSpec) { alert("Please specify Other type"); return; }
-    if (!startDate || !endDate) { alert("Please select dates"); return; }
-    if (!reason) { alert("Please specify reason"); return; }
-    if (!validateOnFly()) { alert("Please check errors (Red fields)."); return; }
-
-    // double submit protection
-    const btn = $('submitBtn');
-    btn.disabled = true;
-    btn.textContent = (mode === "edit") ? "Updating..." : "Sending...";
-    btn.classList.add('opacity-70', 'cursor-not-allowed');
-
-    showLoader("Saving Draft...", "We will send draft to chat.");
-
-    try {
-      const payload = {
-        action: "upsert_draft",                 // ✅ backend ต้องรองรับ
-        requestId: editingRequestId || "",      // ถ้า edit ส่ง requestId เดิม
-        userId: userProfile?.userId || "",
-        name: userProfile?.displayName || "",
-        leaveType: type,
-        otherSpecify: otherSpec,
-        startDate,                              // ✅ yyyy-MM-dd (ISO)
-        endDate,                                // ✅ yyyy-MM-dd (ISO)
-        dayPart,
-        reason,
-        leaveDays: String(lastComputedDays || 0)
-      };
-
-      const res = await apiPostForm(payload);
-      if (!res || !res.ok || !res.requestId) throw new Error(res?.error || "save_failed");
-
-      const requestId = String(res.requestId);
-      const chatMsg = `LEAVE_DRAFT:${requestId}`;
-
-      // send to chat
-      try {
-        await liff.sendMessages([{ type: "text", text: chatMsg }]);
-      } catch (e) {
-        // fallback: show for manual copy
-        console.warn("sendMessages failed", e);
-      }
-
-      hideLoader();
-      openSuccessModal(
-        (mode === "edit") ? "Draft updated" : "Draft created",
-        "We sent your draft to the chat. The bot will reply with a summary card.",
-        chatMsg
-      );
-
-    } catch (err) {
-      hideLoader();
-      alert("Submit failed: " + (err?.message || err));
-      btn.disabled = false;
-      btn.textContent = (mode === "edit") ? "Update Draft" : "Submit";
-      btn.classList.remove('opacity-70', 'cursor-not-allowed');
-    }
-  }
-
-  /** ===================== Init / Edit Prefill ===================== **/
-  function readQuery() {
-    const p = new URLSearchParams(location.search);
-    const requestId = p.get("requestId") || "";
-    const m = p.get("mode") || "";
-    return { requestId, mode: m };
-  }
-
-  function applyRequestToForm(req) {
-    // req expected shape (from backend):
-    // { requestId, userId, name, leaveType, otherSpecify, startDate, endDate, dayPart, reason, status, leaveDays }
-    const type = req.leaveType || "";
-    const other = req.otherSpecify || "";
-    const s = req.startDate || "";
-    const e = req.endDate || "";
-    const dp = req.dayPart || "Full Day";
-    const rs = req.reason || "";
-
-    // select type button
-    if (type) {
-      const btn = Array.from(document.querySelectorAll(".type-btn"))
-        .find(b => (b.getAttribute("onclick") || "").includes(`'${type}'`));
-      if (btn) selectType(btn, type);
-      else $('leaveTypeValue').value = type;
-    }
-
-    $('otherSpecify').value = other;
-    if (type === "Other") $('otherField').classList.remove("hidden");
-    else $('otherField').classList.add("hidden");
-
-    $('startDate').value = s;
-    $('endDate').value = e;
-
-    // set duration
-    const durBtns = document.querySelectorAll(".dur-btn");
-    if (dp === "Morning") selectDur(durBtns[1], "Morning");
-    else if (dp === "Afternoon") selectDur(durBtns[2], "Afternoon");
-    else selectDur(durBtns[0], "Full Day");
-
-    $('reason').value = rs;
-
-    validateOnFly();
-  }
-
-  async function autoRegisterRequester() {
-    // ✅ ไม่ต้องมีหน้า Login แยก: เปิด LIFF แล้วเรียก profile ได้ -> ส่งไป backend เพื่อ upsert ลง All_Requester
-    // backend ต้องรองรับ action=upsert_requester (หรือชื่ออื่นที่คุณอยากใช้)
-    try {
-      await apiPostForm({
-        action: "upsert_requester",
-        userId: userProfile?.userId || "",
-        displayname: userProfile?.displayName || "",
-        active: "Y"
+    try{
+      const requestId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+      const res = await fetch(API_URL, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          action:"create_draft",
+          requestId,
+          userId: profile?.userId || "",
+          name: profile?.displayName || "",
+          leaveType,
+          otherSpecify,
+          startDate, endDate,
+          dayPart,
+          reason,
+          leaveDays
+        })
       });
-    } catch (e) {
-      console.warn("autoRegisterRequester failed", e);
+      const data = await res.json();
+      if(!data || !data.ok) throw new Error(data?.error || "create_draft_failed");
+
+      // ส่งเข้าแชทเพื่อให้บอท reply Flex (Draft)
+      await liff.sendMessages([{ type:"text", text: DRAFT_PREFIX + data.requestId }]);
+      setMsg("Sent to chat ✅");
+      liff.closeWindow();
+    }catch(e){
+      console.error(e);
+      alert("Submit failed: " + (e.message || e));
+      $("submitBtn").disabled = false;
+      $("submitBtn").textContent = "Submit (Draft)";
+      setMsg("");
     }
   }
 
-  async function init() {
-    showLoader("Initializing...", "");
-
+  async function init(){
     await liff.init({ liffId: LIFF_ID });
+    if(!liff.isLoggedIn()){ liff.login(); return; }
+    profile = await liff.getProfile();
+    $("hello").textContent = `Hi, ${profile.displayName}`;
 
-    if (!liff.isLoggedIn()) { liff.login(); return; }
+    const today = new Date().toISOString().split("T")[0];
+    $("startDate").value = today;
+    $("endDate").value = today;
+    $("startDate").min = today;
+    $("endDate").min = today;
 
-    userProfile = await liff.getProfile();
-    $('userGreet').innerHTML = `Hi, <span class="font-bold text-slate-800">${userProfile.displayName}</span>`;
-
-    if (userProfile.pictureUrl) {
-      $('profileImg').src = userProfile.pictureUrl;
-      $('avatarBox').classList.remove('hidden');
-    }
-
-    // register requester (no login page)
-    await autoRegisterRequester();
-
-    // fetch basics
-    await fetchLeaveBalance(userProfile.userId);
     await fetchHolidays();
-
-    // default dates: today
-    const today = new Date().toISOString().split('T')[0];
-    $('startDate').value = today;
-    $('endDate').value = today;
-
-    // For edit mode: allow older date too (don’t set min)
-    // If you want strict min=today only for create, you can set conditionally.
-
-    // detect edit
-    const q = readQuery();
-    if (q.requestId && (q.mode || "").toLowerCase() === "edit") {
-      mode = "edit";
-      editingRequestId = q.requestId;
-      $("modeHint").textContent = `Editing draft: ${editingRequestId}`;
-      $("modeHint").classList.remove("hidden");
-      $("title").textContent = "Edit Draft ✏️";
-      $("submitBtn").textContent = "Update Draft";
-
-      // prefill from backend
-      showLoader("Loading Draft...", "");
-      const req = await fetchRequestForEdit(editingRequestId);
-
-      // (optional) if status is not DRAFT, block editing
-      if (String(req.status || "").toUpperCase() !== "DRAFT") {
-        hideLoader();
-        alert("This request is already submitted/processed and cannot be edited.");
-        doneAndExit();
-        return;
-      }
-
-      applyRequestToForm(req);
-    } else {
-      mode = "create";
-      $("submitBtn").textContent = "Submit";
-      validateOnFly();
-    }
-
-    hideLoader();
+    recalc();
+    setMsg("");
   }
 
-  init().catch(err => {
+  init().catch(err=>{
     console.error(err);
-    hideLoader();
-    alert("LIFF init error: " + (err.message || err));
+    alert("LIFF init error: " + (err.message||err));
   });
 </script>
 </body>
