@@ -2,24 +2,27 @@
 <html lang="th">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
   <title>Reject Remark</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100">
-  <div class="max-w-md mx-auto p-5">
-    <div class="bg-white rounded-2xl p-5 shadow space-y-4">
-      <div class="text-xl font-extrabold text-slate-800">Reject Remark</div>
-      <div class="text-sm text-slate-500">กรุณากรอกเหตุผลการไม่อนุมัติ (บังคับกรอก)</div>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-md mx-auto p-5 min-h-screen">
+    <div class="bg-white rounded-3xl shadow p-6">
+      <h1 class="text-xl font-extrabold">Reject Remark ❌</h1>
+      <p class="text-sm text-slate-500 font-semibold mt-1">กรุณากรอกเหตุผลการไม่อนุมัติ (บังคับ)</p>
 
-      <textarea id="remark" rows="5" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200" placeholder="พิมพ์เหตุผล..."></textarea>
+      <div class="mt-5">
+        <label class="text-sm font-extrabold text-slate-700">Remark <span class="text-red-500">*</span></label>
+        <textarea id="remark" rows="5" class="mt-2 w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" placeholder="Type your reason..."></textarea>
+      </div>
 
-      <button id="btn" class="w-full bg-red-500 text-white font-bold py-4 rounded-2xl shadow" onclick="submitRemark()">
-        Confirm Reject
+      <button id="btn" onclick="submitRemark()" class="mt-5 w-full bg-red-500 hover:bg-red-600 text-white font-extrabold py-3.5 rounded-2xl shadow active:scale-[0.98] transition">
+        Submit Remark
       </button>
 
-      <div id="msg" class="text-xs text-slate-500 text-center"></div>
+      <div id="msg" class="mt-4 text-sm font-semibold text-slate-600"></div>
     </div>
   </div>
 
@@ -27,58 +30,55 @@
   const LIFF_ID = "2008997153-NcbVCWqs";
   const API_URL = "https://script.google.com/macros/s/AKfycbzDaipJG7WIM8Qp-PhnVEpACZsXM86Q_dYWgxAVM3wWg-VtPp4LocgI2zbYquIFO7WW/exec";
 
-  let profile=null;
-  const $=(id)=>document.getElementById(id);
+  let actor = null;
+  let requestId = "";
 
-  function q(name){
-    const u=new URL(location.href);
-    return u.searchParams.get(name)||"";
+  function $(id){ return document.getElementById(id); }
+
+  async function init(){
+    const params = new URLSearchParams(location.search);
+    requestId = params.get("requestId") || "";
+    if (!requestId) $("msg").textContent = "Missing requestId";
+
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    actor = await liff.getProfile();
   }
 
   async function submitRemark(){
-    const requestId = q("requestId");
     const remark = $("remark").value.trim();
-    if(!remark) return alert("Please fill remark");
+    if (!remark) { alert("Remark is required"); return; }
+    if (!requestId) { alert("Missing requestId"); return; }
 
-    $("btn").disabled=true;
-    $("btn").textContent="Submitting...";
-    $("msg").textContent="Saving...";
+    $("btn").disabled = true;
+    $("btn").classList.add("opacity-70");
+    $("msg").textContent = "Submitting...";
 
-    try{
-      const res = await fetch(API_URL, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
+    try {
+      const res = await fetch(API_URL + "?action=reject_with_remark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action:"reject_remark",
           requestId,
-          approverUserId: profile?.userId || "",
+          actorUserId: actor?.userId || "",
           remark
         })
       });
       const data = await res.json();
-      if(!data || !data.ok) throw new Error(data?.error || "reject_failed");
+      if (!data || !data.ok) throw new Error(data?.error || "reject_failed");
 
-      $("msg").textContent="Saved ✅";
-      setTimeout(()=>liff.closeWindow(), 600);
-    }catch(e){
-      console.error(e);
-      alert("Failed: " + (e.message||e));
-      $("btn").disabled=false;
-      $("btn").textContent="Confirm Reject";
-      $("msg").textContent="";
+      $("msg").textContent = "Saved. You can close this window.";
+      setTimeout(() => { try { liff.closeWindow(); } catch(e) {} }, 600);
+
+    } catch(err) {
+      $("btn").disabled = false;
+      $("btn").classList.remove("opacity-70");
+      $("msg").textContent = "Error: " + (err.message || err);
+      alert(err.message || err);
     }
   }
 
-  async function init(){
-    await liff.init({ liffId: LIFF_ID });
-    if(!liff.isLoggedIn()){ liff.login(); return; }
-    profile = await liff.getProfile();
-  }
-
-  init().catch(err=>{
-    console.error(err);
-    alert("LIFF init error: " + (err.message||err));
-  });
+  init().catch(err => alert("LIFF init error: " + (err.message || err)));
 </script>
 </body>
 </html>
