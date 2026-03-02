@@ -11,7 +11,13 @@
 
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
-    .card { background:#fff; border-radius: 1rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); padding: 1.25rem; }
+    .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
+    
+    /* นำสไตล์ Input จากหน้า Index มาใช้คุมโทน */
+    .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
+    .input:focus { background:#fff; border-color:#F87171; box-shadow:0 0 0 3px rgba(248,113,113,.15); }
+    .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
+    
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
@@ -116,7 +122,7 @@
         <div class="text-4xl mb-3">📄❓</div>
         <div class="text-lg font-bold text-[#1F2937]">หาใบลาไม่เจอค่ะ</div>
         <div class="text-sm text-[#9CA3AF] mt-2">โปรดตรวจสอบลิงก์อีกครั้ง</div>
-        <button class="w-full mt-6 bg-[#1F2937] text-white py-3 rounded-xl font-bold hover:bg-black" onclick="doneAndExit()">ปิดหน้าต่าง</button>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="doneAndExit()">ปิดหน้าต่าง</button>
       </div>`;
   }
 
@@ -130,17 +136,17 @@
 
     $("rootBox").innerHTML = `
       <div class="card mb-5 text-center pt-6 pb-5">
-         <div class="w-16 h-16 rounded-full bg-[#FEF2F2] flex items-center justify-center text-[#EF4444] text-3xl mx-auto mb-3 shadow-inner">💬</div>
+         <div class="w-16 h-16 rounded-full bg-[#FFF0F2] flex items-center justify-center text-[#F43F5E] text-3xl mx-auto mb-3 shadow-inner">💬</div>
          <div class="font-bold text-[#1F2937] text-lg">รายการถูกปฏิเสธ</div>
          <div class="text-xs text-[#9CA3AF] mt-1 font-mono">Req No. ${escapeHtml_(shortReq)}</div>
       </div>
 
-      <div class="bg-[#FEF2F2] rounded-xl p-4 mb-6">
-        <div class="text-xs font-bold text-[#B91C1C] mb-2">เหตุผลที่ไม่อนุมัติ:</div>
-        <div class="text-sm text-[#7F1D1D] whitespace-pre-wrap leading-relaxed">${escapeHtml_(remark)}</div>
+      <div class="bg-[#FFF5F5] border border-[#FEE2E2] rounded-xl p-4 mb-6">
+        <div class="text-xs font-bold text-[#BE123C] mb-2">เหตุผลที่ไม่อนุมัติ:</div>
+        <div class="text-sm text-[#9F1239] whitespace-pre-wrap leading-relaxed">${escapeHtml_(remark)}</div>
       </div>
 
-      <button class="w-full bg-[#1F2937] text-white py-3.5 rounded-xl font-bold text-md hover:bg-black transition-colors shadow-md active:scale-[0.98]" onclick="doneAndExit()">ปิดหน้าต่าง</button>
+      <button class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-md transition-all shadow-lg shadow-blue-200 active:scale-[0.98]" onclick="doneAndExit()">ปิดหน้าต่าง</button>
     `;
   }
 
@@ -163,7 +169,7 @@
         <div class="text-center mb-4">
           <div class="text-4xl mb-2">📥</div>
           <div class="font-bold text-lg text-[#1F2937]">Pending Approval</div>
-          <div class="text-xs font-bold text-[#EAB308] mt-1">รออนุมัติ</div>
+          <div class="text-xs font-bold text-[#FBBF24] mt-1">รออนุมัติ</div>
         </div>
         <hr class="border-[#F3F4F6] mb-4" />
         <div class="space-y-3 px-1">
@@ -177,21 +183,21 @@
         </div>
       </div>
 
-      <div class="bg-[#FEF2F2] rounded-xl p-4 mb-6 border border-[#FEE2E2]">
-        <label class="block text-xs font-bold text-[#B91C1C] mb-2">เหตุผลที่ไม่อนุมัติ <span class="text-[#EF4444]">*</span></label>
-        <textarea id="rejectRemark" rows="4" class="w-full bg-white border border-[#FCA5A5] rounded-lg p-3 outline-none focus:border-[#EF4444] focus:ring-2 focus:ring-[#FEE2E2] transition-all text-sm text-[#7F1D1D] resize-none" placeholder="ระบุเหตุผลให้พนักงานทราบ"></textarea>
+      <div class="space-y-2 mb-6 ml-1">
+        <label class="block text-sm font-bold text-[#1F2937]">เหตุผลที่ไม่อนุมัติ <span class="text-[#EF4444]">*</span></label>
+        <textarea id="rejectRemark" rows="3" class="input resize-none" placeholder="ระบุเหตุผลให้พนักงานทราบ"></textarea>
         
-        <div id="remarkErr" class="hidden text-xs text-[#EF4444] mt-2 flex items-center font-bold">
+        <div id="remarkErr" class="hidden text-xs text-[#EF4444] mt-1.5 flex items-center font-bold">
           <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
           กรุณากรอกเหตุผลก่อนกดยืนยัน
         </div>
       </div>
 
       <div class="space-y-3">
-        <button id="submitBtn" class="w-full bg-[#EF4444] hover:bg-red-600 text-white py-3.5 rounded-xl font-bold text-md transition-all shadow-md shadow-red-200 active:scale-[0.98]"
-          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">ยืนยัน</button>
-        <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" 
-          onclick="doneAndExit()">ยกเลิก</button>
+        <button id="submitBtn" class="w-full bg-[#F87171] hover:bg-[#EF4444] text-white py-4 rounded-2xl font-bold text-md transition-all shadow-lg shadow-red-200 active:scale-[0.98]"
+          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">ยืนยัน (Confirm)</button>
+        <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-2xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" 
+          onclick="doneAndExit()">ยกเลิก (Cancel)</button>
       </div>`;
   }
 
@@ -204,11 +210,11 @@
     
     if (!remark) {
       err?.classList.remove("hidden");
-      ta?.classList.add("border-[#EF4444]", "bg-[#FEF2F2]");
+      ta?.classList.add("err");
       
       ta.addEventListener('input', function() {
         err?.classList.add("hidden");
-        ta?.classList.remove("border-[#EF4444]", "bg-[#FEF2F2]");
+        ta?.classList.remove("err");
       }, { once: true });
       return;
     }
@@ -238,7 +244,6 @@
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">Thank you</div>
         </div>
       `;
       
@@ -291,9 +296,3 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-
