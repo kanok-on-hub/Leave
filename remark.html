@@ -3,37 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
-  <title>Remark</title>
+  <title>Leave Management</title>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background:#f0f4f8; color:#1e293b; -webkit-tap-highlight-color: transparent; }
-    .card { background:#fff; border-radius: 1.25rem; border:1px solid #eef2ff; box-shadow: 0 8px 30px rgba(15,23,42,0.06); padding: 1.1rem; }
-    .input { background:#f8fafc; border:1px solid #e2e8f0; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#334155; }
-    .input:focus { background:#fff; border-color:#3b82f6; box-shadow:0 0 0 4px rgba(59,130,246,.1); }
-    .err { border-color:#ef4444 !important; background-color:#fef2f2 !important; box-shadow:0 0 0 4px rgba(239,68,68,.1) !important; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
+    .card { background:#fff; border-radius: 1rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); padding: 1.25rem; }
+    
+    /* ซ่อน Scrollbar แต่ยังเลื่อนได้ */
+    ::-webkit-scrollbar { display: none; }
   </style>
 </head>
 
-<body class="pb-20">
-  <div class="max-w-md mx-auto min-h-screen flex flex-col">
-    <div class="bg-white px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] mb-6 relative z-10">
+<body class="pb-20 antialiased">
+  <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
+    
+    <div class="bg-white px-6 pt-10 pb-6 rounded-b-3xl shadow-sm mb-6 relative z-10 border-b border-slate-100 text-center">
       <div>
-        <h1 id="title" class="text-2xl font-bold text-slate-800 tracking-tight">Remark</h1>
-        <p id="subTitle" class="text-slate-500 text-sm font-medium mt-1">Loading...</p>
+        <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Loading...</h1>
+        <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-1">Please wait a moment</p>
       </div>
     </div>
 
     <div class="px-5 pb-24" id="rootBox"></div>
 
-    <!-- Loader -->
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
-      <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center max-w-[180px]">
-        <div class="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-        <div class="font-bold text-slate-700 text-sm" id="loaderText">Processing...</div>
+      <div class="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center max-w-[180px] w-full">
+        <div class="w-10 h-10 border-4 border-[#F3F4F6] border-t-[#3B82F6] rounded-full animate-spin mb-4"></div>
+        <div class="font-bold text-[#1F2937] text-sm" id="loaderText">Processing...</div>
       </div>
     </div>
   </div>
@@ -75,64 +75,110 @@
   }
 
   function renderNotFound_() {
-    $("rootBox").innerHTML = `<div class="card">หาใบลาไม่เจอค่ะ</div>`;
+    $("title").textContent = "Not Found";
+    $("subTitle").textContent = "Error";
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">📄❓</div>
+        <div class="text-lg font-bold text-[#1F2937]">หาใบลาไม่เจอค่ะ</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">โปรดตรวจสอบลิงก์อีกครั้ง</div>
+        <button class="w-full mt-6 bg-[#1F2937] text-white py-3 rounded-xl font-bold hover:bg-black" onclick="doneAndExit()">ปิดหน้าต่าง</button>
+      </div>`;
   }
 
+  // === โหมด 1: พนักงานดูเหตุผลที่โดนปฏิเสธ (Theme: Pastel Red) ===
   function renderViewRemark_(req, requestId) {
     const remark = (req.remark || "").toString().trim() || "-";
-    $("title").textContent = "Remark";
-    $("subTitle").textContent = "Details";
+    const reqNo = escapeHtml_(req.requestId || requestId);
+
+    $("title").textContent = "Remark Details";
+    $("subTitle").textContent = "เหตุผลที่ไม่อนุมัติ";
+
     $("rootBox").innerHTML = `
-      <div class="card space-y-3">
-        <div class="text-lg font-bold text-slate-800">Remark</div>
-        <div class="text-xs text-slate-500">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml_(remark)}</div>
-        <button class="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors" onclick="doneAndExit()">Close</button>
-      </div>`;
+      <div class="card mb-5 text-center pt-6 pb-5">
+         <div class="w-16 h-16 rounded-full bg-[#FEF2F2] flex items-center justify-center text-[#EF4444] text-3xl mx-auto mb-3 shadow-inner">💬</div>
+         <div class="font-bold text-[#1F2937] text-lg">รายการถูกปฏิเสธ</div>
+         <div class="text-xs text-[#9CA3AF] mt-1 font-mono">Req No. ${reqNo}</div>
+      </div>
+
+      <div class="bg-[#FEF2F2] rounded-xl p-4 mb-6">
+        <div class="text-xs font-bold text-[#B91C1C] mb-2">เหตุผล (Remark):</div>
+        <div class="text-sm text-[#7F1D1D] whitespace-pre-wrap leading-relaxed">${escapeHtml_(remark)}</div>
+      </div>
+
+      <button class="w-full bg-[#1F2937] text-white py-3.5 rounded-xl font-bold text-md hover:bg-black transition-colors shadow-md active:scale-[0.98]" onclick="doneAndExit()">ปิดหน้าต่าง</button>
+    `;
   }
 
+  // === โหมด 2: หัวหน้ากดปฏิเสธและกรอกเหตุผล ===
   function renderReject_(req, requestId) {
+    const reqNo = escapeHtml_(req.requestId || requestId);
+    const startDate = escapeHtml_(req.startDate || "-");
+    const endDate = escapeHtml_(req.endDate || "-");
+    const dateText = startDate === endDate ? startDate : `${startDate} → ${endDate}`;
+
     $("title").textContent = "Reject Leave ❌";
-    $("subTitle").textContent = "Please provide remark";
+    $("subTitle").textContent = "ไม่อนุมัติคำขอลา";
+
     $("rootBox").innerHTML = `
-      <div class="card space-y-4">
-        <div>
-          <div class="text-sm font-bold text-slate-700">Summary</div>
-          <div class="text-xs text-slate-500 mt-1">RequestId: ${escapeHtml_(req.requestId || requestId)}</div>
-          <div class="text-sm text-slate-700 mt-2 space-y-1">
-            <div><b>Requester:</b> ${escapeHtml_(req.name || "-")}</div>
-            <div><b>Leave Type:</b> ${escapeHtml_(req.leaveType || "-")}</div>
-            <div><b>Date:</b> ${escapeHtml_(req.startDate || "-")} → ${escapeHtml_(req.endDate || "-")}</div>
-            <div><b>Days:</b> ${escapeHtml_(String(req.leaveDays ?? "-"))}</div>
-            <div class="mt-2"><b>Reason:</b> ${escapeHtml_(req.reason || "-")}</div>
-          </div>
+      <div class="card mb-5">
+        <div class="text-center mb-4">
+          <div class="text-4xl mb-2">📥</div>
+          <div class="font-bold text-lg text-[#1F2937]">Pending Approval</div>
+          <div class="text-xs font-bold text-[#EAB308] mt-1">รออนุมัติ</div>
         </div>
-
-        <div>
-          <label class="text-sm font-bold text-slate-700">Remark <span class="text-red-500">*</span></label>
-          <textarea id="rejectRemark" rows="5" class="input resize-none mt-2" placeholder="กรุณาระบุเหตุผลที่ไม่อนุมัติ..."></textarea>
-          <div id="remarkErr" class="hidden text-xs text-red-600 mt-2">กรุณากรอก Remark</div>
+        <hr class="border-[#F3F4F6] mb-4" />
+        <div class="space-y-3 text-sm px-1">
+          <div class="flex justify-between items-baseline"><span class="text-[#9CA3AF] text-xs flex-1">Req No.</span><span class="font-bold text-[#1F2937] flex-[2] text-right font-mono">${reqNo}</span></div>
+          <div class="flex justify-between items-baseline"><span class="text-[#9CA3AF] text-xs flex-1">Name</span><span class="font-bold text-[#1F2937] flex-[2] text-right">${escapeHtml_(req.name || "-")}</span></div>
+          <div class="flex justify-between items-baseline"><span class="text-[#9CA3AF] text-xs flex-1">Type</span><span class="font-bold text-[#1F2937] flex-[2] text-right">${escapeHtml_(req.leaveType || "-")}</span></div>
+          <div class="flex justify-between items-baseline"><span class="text-[#9CA3AF] text-xs flex-1">Date</span><span class="font-bold text-[#1F2937] flex-[2] text-right">${dateText}</span></div>
+          <div class="flex justify-between items-baseline"><span class="text-[#9CA3AF] text-xs flex-1">Days</span><span class="font-bold text-[#1F2937] flex-[2] text-right">${escapeHtml_(String(req.leaveDays ?? "-"))}</span></div>
         </div>
+      </div>
 
-        <button class="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-bold text-lg transition-colors"
-          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">Submit Reject</button>
+      <div class="bg-[#FEF2F2] rounded-xl p-4 mb-6 border border-[#FEE2E2]">
+        <label class="block text-xs font-bold text-[#B91C1C] mb-2">เหตุผลที่ไม่อนุมัติ <span class="text-[#EF4444]">*</span></label>
+        <textarea id="rejectRemark" rows="4" class="w-full bg-white border border-[#FCA5A5] rounded-lg p-3 outline-none focus:border-[#EF4444] focus:ring-2 focus:ring-[#FEE2E2] transition-all text-sm text-[#7F1D1D] resize-none" placeholder="ระบุเหตุผลให้พนักงานทราบ..."></textarea>
+        
+        <div id="remarkErr" class="hidden text-xs text-[#EF4444] mt-2 flex items-center font-bold">
+          <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+          กรุณากรอกเหตุผลก่อนกดยืนยัน
+        </div>
+      </div>
 
-        <button class="w-full bg-slate-100 text-slate-700 py-3.5 rounded-xl font-bold text-lg" onclick="doneAndExit()">Cancel</button>
+      <div class="space-y-3">
+        <button id="submitBtn" class="w-full bg-[#EF4444] hover:bg-red-600 text-white py-3.5 rounded-xl font-bold text-md transition-all shadow-md shadow-red-200 active:scale-[0.98]"
+          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">❌ ยืนยันการไม่อนุมัติ</button>
+        <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" 
+          onclick="doneAndExit()">ยกเลิก / ปิดหน้าต่าง</button>
       </div>`;
   }
 
+  // === ฟังก์ชันกดยืนยัน Reject ===
   async function submitReject_(requestId) {
     const ta = document.getElementById("rejectRemark");
     const err = document.getElementById("remarkErr");
+    const btn = document.getElementById("submitBtn");
+
     const remark = (ta?.value || "").trim();
+    
+    // ตรวจสอบความถูกต้อง (Validation)
     if (!remark) {
       err?.classList.remove("hidden");
-      ta?.classList.add("err");
+      ta?.classList.add("border-[#EF4444]", "bg-[#FEF2F2]");
+      
+      ta.addEventListener('input', function() {
+        err?.classList.add("hidden");
+        ta?.classList.remove("border-[#EF4444]", "bg-[#FEF2F2]");
+      }, { once: true });
       return;
     }
 
     try {
-      showLoader("Submitting...");
+      showLoader("กำลังบันทึกข้อมูล...");
+      if(btn) btn.disabled = true;
+
       const profile = await liff.getProfile();
 
       const data = await postFormUrlEncoded_({
@@ -143,23 +189,36 @@
       });
 
       if (!data || !data.ok) {
-        hideLoader();
-        alert("Reject failed: " + (data?.error || "unknown"));
-        return;
+        throw new Error(data?.error || "ระบบขัดข้อง กรุณาลองใหม่");
       }
 
       await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
+      
       hideLoader();
-      doneAndExit();
+      
+      // ✅ UX Tweak: หน้าจอสำเร็จ (Theme: Pastel Green)
+      $("rootBox").innerHTML = `
+        <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
+          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
+          <div class="text-xl font-bold text-[#1F2937]">บันทึกผลสำเร็จ</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">ระบบกำลังปิดหน้าต่างนี้...</div>
+        </div>
+      `;
+      
+      setTimeout(() => doneAndExit(), 1500);
+
     } catch (e) {
       hideLoader();
-      alert("Reject failed: " + (e?.message || e));
+      if(btn) btn.disabled = false;
+      alert("❌ ไม่สามารถทำรายการได้: " + (e?.message || e));
     }
   }
 
+  // === เริ่มทำงาน ===
   async function init() {
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
+    
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
     const params = new URLSearchParams(location.search);
@@ -185,15 +244,16 @@
     if (mode === "view_remark") return renderViewRemark_(req, requestId);
     if (mode === "reject") return renderReject_(req, requestId);
 
-    // unknown mode
     renderNotFound_();
   }
 
   init().catch(err => {
     console.error(err);
     hideLoader();
-    alert("LIFF init error: " + (err.message || err));
+    alert("LIFF Init Error: " + (err.message || err));
   });
 </script>
 </body>
 </html>
+
+
