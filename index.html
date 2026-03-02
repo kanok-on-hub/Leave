@@ -376,7 +376,7 @@
     const requestId = (mode === "edit") ? (params.get("requestId") || "") : "";
 
     try {
-      showLoader("Submitting...");
+      showLoader("Saving...");
       $('submitBtn').disabled = true;
 
       const data = await postFormUrlEncoded_({
