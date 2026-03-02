@@ -11,13 +11,7 @@
 
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
-    .card { background:#fff; border-radius: 1rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.25rem; }
-    
-    /* สไตล์สำหรับแถวข้อมูล 4:7 เหมือน Flex */
-    .kv-row { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.75rem; }
-    .kv-label { flex: 4; color: #9CA3AF; font-size: 0.75rem; }
-    .kv-value { flex: 7; color: #1F2937; font-size: 0.75rem; font-weight: 700; text-align: right; word-break: break-word; }
-    
+    .card { background:#fff; border-radius: 1rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); padding: 1.25rem; }
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
@@ -25,9 +19,11 @@
 <body class="pb-20 antialiased">
   <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
     
-    <div class="bg-white px-6 pt-10 pb-6 rounded-b-3xl shadow-sm mb-6 border-b border-slate-100 text-center">
-      <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Loading...</h1>
-      <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-1">Please wait</p>
+    <div class="bg-white px-6 pt-10 pb-6 rounded-b-3xl shadow-sm mb-6 relative z-10 border-b border-slate-100 text-center">
+      <div>
+        <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Loading...</h1>
+        <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-1">Please wait a moment</p>
+      </div>
     </div>
 
     <div class="px-5 pb-24" id="rootBox"></div>
@@ -48,43 +44,87 @@
 
   const $ = (id) => document.getElementById(id);
 
-  // --- Utility Functions ---
-  function shortReqId(id) {
-    const s = String(id || "");
-    return s.length > 8 ? "#" + s.slice(-8) : "#" + s;
+  function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
+  function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
+  function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
+
+  function escapeHtml_(s) {
+    return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
+
+  // 1. ฟังก์ชันทำ Req No สั้น
+  function shortReqId(reqId) {
+    const s = String(reqId || "");
+    return "#" + (s.length <= 8 ? s : s.slice(-8));
   }
 
+  // 2. ฟังก์ชันทำ Date Range สั้น (เหมือนใน GAS)
   function formatLeaveRangeShort(startVal, endVal) {
     if (!startVal || !endVal) return "-";
     const s = new Date(startVal);
     const e = new Date(endVal);
-    if (isNaN(s) || isNaN(e)) return "-";
+    if (isNaN(s) || isNaN(e)) return `${startVal} → ${endVal}`;
 
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const sd = s.getDate(), ed = e.getDate();
-    const sm = months[s.getMonth()], em = months[e.getMonth()];
-    const sy = s.getFullYear(), ey = e.getFullYear();
+    const sd = s.getDate(), sm = months[s.getMonth()], sy = s.getFullYear();
+    const ed = e.getDate(), em = months[e.getMonth()], ey = e.getFullYear();
 
-    if (s.toDateString() === e.toDateString()) return `${sd} ${sm} ${sy}`;
-    if (sm === em && sy === ey) return `${sd}-${ed} ${sm} ${sy}`;
-    if (sy === ey) return `${sd} ${sm} - ${ed} ${em} ${sy}`;
+    if (s.getTime() === e.getTime() || (sd === ed && sm === em && sy === ey)) {
+      return `${sd} ${sm} ${sy}`;
+    }
+    if (sm === em && sy === ey) {
+      return `${sd}-${ed} ${sm} ${sy}`;
+    }
+    if (sy === ey) {
+      return `${sd} ${sm} - ${ed} ${em} ${sy}`;
+    }
     return `${sd} ${sm} ${String(sy).slice(-2)} - ${ed} ${em} ${String(ey).slice(-2)}`;
   }
 
-  function renderDataRow(label, value, isLink = false, linkUrl = "") {
-    let valueHtml = isLink 
-      ? `<a href="${linkUrl}" class="text-[#2563EB] underline">${value}</a>` 
-      : value;
+  // Helper สำหรับสร้างบรรทัดข้อมูลเหมือน Flex (Label กว้างคงที่ ชิดซ้าย)
+  function kvRow(label, valueHtml) {
     return `
-      <div class="kv-row">
-        <div class="kv-label">${label}</div>
-        <div class="kv-value">${valueHtml}</div>
+      <div class="flex items-baseline space-x-3">
+        <span class="text-[#9CA3AF] text-xs w-20 flex-shrink-0">${label}</span>
+        <span class="font-bold text-[#1F2937] text-sm break-words flex-1">${valueHtml}</span>
+      </div>
+    `;
+  }
+
+  async function getRequest_(requestId) {
+    const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
+    return res.json();
+  }
+
+  async function postFormUrlEncoded_(obj) {
+    const body = new URLSearchParams();
+    Object.keys(obj || {}).forEach(k => body.set(k, obj[k] == null ? "" : String(obj[k])));
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: body.toString()
+    });
+    return res.json();
+  }
+
+  function renderNotFound_() {
+    $("title").textContent = "Not Found";
+    $("subTitle").textContent = "Error";
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">📄❓</div>
+        <div class="text-lg font-bold text-[#1F2937]">หาใบลาไม่เจอค่ะ</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">โปรดตรวจสอบลิงก์อีกครั้ง</div>
+        <button class="w-full mt-6 bg-[#1F2937] text-white py-3 rounded-xl font-bold hover:bg-black" onclick="doneAndExit()">ปิดหน้าต่าง</button>
       </div>`;
   }
 
-  // --- UI Renderers ---
+  // === โหมด 1: พนักงานดูเหตุผลที่โดนปฏิเสธ ===
   function renderViewRemark_(req, requestId) {
     const remark = (req.remark || "").toString().trim() || "-";
+    const shortReq = shortReqId(req.requestId || requestId);
+
     $("title").textContent = "Remark Details";
     $("subTitle").textContent = "เหตุผลที่ไม่อนุมัติ";
 
@@ -92,113 +132,168 @@
       <div class="card mb-5 text-center pt-6 pb-5">
          <div class="w-16 h-16 rounded-full bg-[#FEF2F2] flex items-center justify-center text-[#EF4444] text-3xl mx-auto mb-3 shadow-inner">💬</div>
          <div class="font-bold text-[#1F2937] text-lg">รายการถูกปฏิเสธ</div>
-         <div class="text-xs text-[#9CA3AF] mt-1 font-mono">Req No. ${shortReqId(req.requestId || requestId)}</div>
+         <div class="text-xs text-[#9CA3AF] mt-1 font-mono">Req No. ${escapeHtml_(shortReq)}</div>
       </div>
+
       <div class="bg-[#FEF2F2] rounded-xl p-4 mb-6">
         <div class="text-xs font-bold text-[#B91C1C] mb-2">เหตุผล (Remark):</div>
-        <div class="text-sm text-[#7F1D1D] whitespace-pre-wrap leading-relaxed font-medium">${escapeHtml_(remark)}</div>
+        <div class="text-sm text-[#7F1D1D] whitespace-pre-wrap leading-relaxed">${escapeHtml_(remark)}</div>
       </div>
-      <button class="w-full bg-[#1F2937] text-white py-4 rounded-xl font-bold text-md shadow-md active:scale-95 transition-all" onclick="liff.closeWindow()">ปิดหน้าต่าง</button>
+
+      <button class="w-full bg-[#1F2937] text-white py-3.5 rounded-xl font-bold text-md hover:bg-black transition-colors shadow-md active:scale-[0.98]" onclick="doneAndExit()">ปิดหน้าต่าง</button>
     `;
   }
 
+  // === โหมด 2: หัวหน้ากดปฏิเสธและกรอกเหตุผล ===
   function renderReject_(req, requestId) {
+    const shortReq = shortReqId(req.requestId || requestId);
     const dateText = formatLeaveRangeShort(req.startDate, req.endDate);
-    const attUrl = (req.attachmentUrl || "").trim();
+    
+    // 3. จัดการลิงก์ไฟล์แนบ
+    const attUrl = req.attachmentUrl ? String(req.attachmentUrl).trim() : "";
+    const attachHtml = attUrl 
+      ? `<a href="${escapeAttr_(attUrl)}" target="_blank" class="text-[#2563EB] underline decoration-[#2563EB]">คลิกเพื่อดูไฟล์</a>`
+      : `—`;
 
     $("title").textContent = "Reject Leave ❌";
     $("subTitle").textContent = "ไม่อนุมัติคำขอลา";
 
-    let html = `
+    $("rootBox").innerHTML = `
       <div class="card mb-5">
         <div class="text-center mb-4">
           <div class="text-4xl mb-2">📥</div>
           <div class="font-bold text-lg text-[#1F2937]">Pending Approval</div>
-          <div class="text-xs font-bold text-[#EAB308] mt-1 uppercase">รออนุมัติ</div>
+          <div class="text-xs font-bold text-[#EAB308] mt-1">รออนุมัติ</div>
         </div>
         <hr class="border-[#F3F4F6] mb-4" />
-        <div class="space-y-1">
-          ${renderDataRow("Req No.", shortReqId(req.requestId || requestId))}
-          ${renderDataRow("Name", escapeHtml_(req.name || "-"))}
-          ${renderDataRow("Type", escapeHtml_(req.leaveType || "-"))}
-          ${renderDataRow("Date", dateText)}
-          ${renderDataRow("Days", escapeHtml_(String(req.leaveDays ?? "-")))}
-          ${renderDataRow("Attach", attUrl ? "คลิกเพื่อดูไฟล์" : "—", !!attUrl, attUrl)}
+        <div class="space-y-3 px-1">
+          ${kvRow("Req No.", `<span class="font-mono">${escapeHtml_(shortReq)}</span>`)}
+          ${kvRow("Name", escapeHtml_(req.name || "-"))}
+          ${kvRow("Type", escapeHtml_(req.leaveType || "-"))}
+          ${kvRow("Date", escapeHtml_(dateText))}
+          ${kvRow("Days", escapeHtml_(String(req.leaveDays ?? "-")))}
+          ${kvRow("Reason", escapeHtml_(req.reason || "-"))}
+          ${kvRow("Attach", attachHtml)}
         </div>
       </div>
 
       <div class="bg-[#FEF2F2] rounded-xl p-4 mb-6 border border-[#FEE2E2]">
-        <label class="block text-xs font-bold text-[#B91C1C] mb-2 uppercase">เหตุผลที่ไม่อนุมัติ *</label>
-        <textarea id="rejectRemark" rows="4" class="w-full bg-white border border-[#FCA5A5] rounded-lg p-3 outline-none focus:border-[#EF4444] transition-all text-sm text-[#7F1D1D] resize-none" placeholder="ระบุเหตุผล..."></textarea>
-        <div id="remarkErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold italic">! กรุณากรอกเหตุผลก่อนกดยืนยัน</div>
+        <label class="block text-xs font-bold text-[#B91C1C] mb-2">เหตุผลที่ไม่อนุมัติ <span class="text-[#EF4444]">*</span></label>
+        <textarea id="rejectRemark" rows="4" class="w-full bg-white border border-[#FCA5A5] rounded-lg p-3 outline-none focus:border-[#EF4444] focus:ring-2 focus:ring-[#FEE2E2] transition-all text-sm text-[#7F1D1D] resize-none" placeholder="ระบุเหตุผลให้พนักงานทราบ..."></textarea>
+        
+        <div id="remarkErr" class="hidden text-xs text-[#EF4444] mt-2 flex items-center font-bold">
+          <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+          กรุณากรอกเหตุผลก่อนกดยืนยัน
+        </div>
       </div>
 
       <div class="space-y-3">
-        <button id="submitBtn" class="w-full bg-[#EF4444] text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all" onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">❌ ยืนยันการไม่อนุมัติ</button>
-        <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-4 rounded-xl font-bold active:scale-95 transition-all" onclick="liff.closeWindow()">ยกเลิก</button>
+        <button id="submitBtn" class="w-full bg-[#EF4444] hover:bg-red-600 text-white py-3.5 rounded-xl font-bold text-md transition-all shadow-md shadow-red-200 active:scale-[0.98]"
+          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">❌ ยืนยันการไม่อนุมัติ</button>
+        <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" 
+          onclick="doneAndExit()">ยกเลิก / ปิดหน้าต่าง</button>
       </div>`;
-    
-    $("rootBox").innerHTML = html;
   }
 
-  // --- Logic Functions ---
   async function submitReject_(requestId) {
-    const remark = ($("rejectRemark")?.value || "").trim();
+    const ta = document.getElementById("rejectRemark");
+    const err = document.getElementById("remarkErr");
+    const btn = document.getElementById("submitBtn");
+
+    const remark = (ta?.value || "").trim();
+    
     if (!remark) {
-      $("remarkErr").classList.remove("hidden");
-      $("rejectRemark").classList.add("border-[#EF4444]");
+      err?.classList.remove("hidden");
+      ta?.classList.add("border-[#EF4444]", "bg-[#FEF2F2]");
+      
+      ta.addEventListener('input', function() {
+        err?.classList.add("hidden");
+        ta?.classList.remove("border-[#EF4444]", "bg-[#FEF2F2]");
+      }, { once: true });
       return;
     }
 
     try {
-      showLoader("Saving...");
-      const profile = await liff.getProfile();
-      const res = await postFormUrlEncoded_({ action: "reject_leave", requestId, actorUserId: profile.userId, remark });
+      showLoader("กำลังบันทึกข้อมูล...");
+      if(btn) btn.disabled = true;
 
-      if (res && res.ok) {
-        await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
-        hideLoader();
-        $("rootBox").innerHTML = `
-          <div class="card text-center py-12 mt-10 border border-[#10B981]">
-            <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
-            <div class="text-xl font-bold text-[#1F2937]">บันทึกผลสำเร็จ</div>
-          </div>`;
-        setTimeout(() => liff.closeWindow(), 1500);
-      } else {
-        throw new Error(res.error || "Failed");
+      const profile = await liff.getProfile();
+
+      const data = await postFormUrlEncoded_({
+        action: "reject_leave",
+        requestId,
+        actorUserId: profile.userId,
+        remark
+      });
+
+      if (!data || !data.ok) {
+        throw new Error(data?.error || "ระบบขัดข้อง กรุณาลองใหม่");
       }
+
+      await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
+      
+      hideLoader();
+      
+      $("rootBox").innerHTML = `
+        <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
+          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
+          <div class="text-xl font-bold text-[#1F2937]">บันทึกผลสำเร็จ</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">ระบบกำลังปิดหน้าต่างนี้...</div>
+        </div>
+      `;
+      
+      setTimeout(() => doneAndExit(), 1500);
+
     } catch (e) {
       hideLoader();
-      alert("Error: " + e.message);
+      if(btn) btn.disabled = false;
+      alert("❌ ไม่สามารถทำรายการได้: " + (e?.message || e));
     }
   }
 
   async function init() {
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
+    
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
     const params = new URLSearchParams(location.search);
-    const mode = params.get("mode"), requestId = params.get("requestId");
-    if (!mode || !requestId) return renderNotFound_();
+    const mode = params.get("mode");
+    const requestId = params.get("requestId");
 
-    const data = await getRequest_(requestId);
+    if (!mode || !requestId) {
+      hideLoader();
+      renderNotFound_();
+      return;
+    }
+
+    let req = null;
+    try {
+      const data = await getRequest_(requestId);
+      if (data && data.ok && data.request) req = data.request;
+    } catch(e) {}
+
     hideLoader();
-    if (!data || !data.ok || !data.request) return renderNotFound_();
 
-    if (mode === "view_remark") renderViewRemark_(data.request, requestId);
-    else if (mode === "reject") renderReject_(data.request, requestId);
-    else renderNotFound_();
+    if (!req) return renderNotFound_();
+
+    if (mode === "view_remark") return renderViewRemark_(req, requestId);
+    if (mode === "reject") return renderReject_(req, requestId);
+
+    renderNotFound_();
   }
 
-  function showLoader(msg){ $("loaderText").textContent = msg; $("loader").classList.replace("hidden", "flex"); }
-  function hideLoader(){ $("loader").classList.replace("flex", "hidden"); }
-  function escapeHtml_(s) { return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
-  function escapeAttr_(s) { return escapeHtml_(s).replace(/'/g, "&#39;"); }
-
-  init().catch(e => alert(e.message));
+  init().catch(err => {
+    console.error(err);
+    hideLoader();
+    alert("LIFF Init Error: " + (err.message || err));
+  });
 </script>
 </body>
 </html>
+
+
+
+
 
 
