@@ -123,7 +123,7 @@
           <span class="text-lg">⚠️</span>
           <div class="text-sm font-bold text-[#9A3412]">ลาป่วย ≥ 3 วันต้องแนบใบรับรองแพทย์</div>
         </div>
-        <div class="text-[11px] text-[#C2410C] font-semibold mt-1.5 leading-relaxed">
+        <div class="text-[11px] text-[#9A3412] font-semibold mt-1.5 leading-relaxed">
           ระบบจะขอรูปภาพในแชท สามารถแนบไฟล์ในแชทได้เลย (JPG / PDF)
         </div>
       </div>
@@ -423,7 +423,7 @@
 
     // ดึงโปรไฟล์พนักงาน
     userProfile = await liff.getProfile();
-    $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}</span> 👋`;
+    $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}`;
     if (userProfile.pictureUrl) { 
       $('profileImg').src = userProfile.pictureUrl; 
       $('avatarBox').classList.remove('hidden'); 
