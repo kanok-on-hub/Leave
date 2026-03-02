@@ -133,6 +133,7 @@
           </div>
         </div>
       </div>
+    </div>
 
     <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F3F4F6] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
       <button id="submitBtn" onclick="handleSubmit()"
@@ -343,6 +344,8 @@
     }
 
     $('otherSpecify').value = r.otherSpecify || "";
+    
+    // ตั้งค่า Date 
     $('startDate').value = toDateInputValue_(r.startDate) || $('startDate').value;
     $('endDate').value = toDateInputValue_(r.endDate) || $('endDate').value;
 
@@ -436,12 +439,16 @@
 
     const isEdit = (mode === "edit" && !!requestId);
 
-    // ล็อกปฏิทินไม่ให้เลือกย้อนหลัง (เฉพาะสร้างใหม่)
+    const today = new Date().toISOString().split('T')[0];
+    
+    // ล็อกปฏิทินไม่ให้เลือกย้อนหลัง เสมอ ทุกเคส!
+    $('startDate').setAttribute("min", today);
+    $('endDate').setAttribute("min", today);
+
+    // เซ็ตค่าเริ่มต้นเป็นวันนี้ (เฉพาะสร้างฟอร์มใหม่)
     if (!isEdit) {
-      const today = new Date().toISOString().split('T')[0];
-      $('startDate').value = today; $('endDate').value = today;
-      $('startDate').setAttribute("min", today);
-      $('endDate').setAttribute("min", today);
+      $('startDate').value = today; 
+      $('endDate').value = today;
     }
 
     // โหลดข้อมูลโควตาและวันหยุดแบบขนาน
@@ -466,4 +473,7 @@
 </script>
 </body>
 </html>
+
+
+
 
