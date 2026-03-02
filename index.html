@@ -31,9 +31,9 @@
 <body class="pb-32 antialiased">
   <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
     
-    <div class="bg-white px-6 pt-10 pb-6 rounded-b-3xl shadow-sm mb-6 relative z-10 border-b border-slate-100">
+    <div class="bg-white px-6 pt-10 pb-4 rounded-b-3xl shadow-sm mb-5 relative z-10 border-b border-slate-100">
       <div class="flex items-center gap-4">
-        <div id="avatarBox" class="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-md ring-2 ring-blue-50 hidden">
+        <div id="avatarBox" class="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md ring-2 ring-blue-50 hidden">
           <img id="profileImg" src="" class="w-full h-full object-cover">
         </div>
         <div>
@@ -133,6 +133,7 @@
           </div>
         </div>
       </div>
+    </div>
 
     <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F3F4F6] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
       <button id="submitBtn" onclick="handleSubmit()"
@@ -365,11 +366,11 @@
     const reason = $('reason').value.trim();
     const otherSpec = $('otherSpecify').value.trim();
 
-    if (!type) return alert("Please select Leave Type / กรุณาเลือกประเภทการลา");
-    if (type === 'Other' && !otherSpec) return alert("Please specify Other type / กรุณาระบุประเภทการลา");
-    if (!startDate || !endDate) return alert("Please select dates / กรุณาเลือกวันที่");
-    if (!reason) return alert("Please specify reason / กรุณาระบุเหตุผล");
-    if (!validateOnFly()) return alert("Please check errors (Red fields) / วันลาเกินโควตาที่กำหนด");
+    if (!type) return alert("กรุณาเลือกประเภทการลา");
+    if (type === 'Other' && !otherSpec) return alert("กรุณาระบุประเภทการลา");
+    if (!startDate || !endDate) return alert("กรุณาเลือกวันที่");
+    if (!reason) return alert("กรุณาระบุเหตุผล");
+    if (!validateOnFly()) return alert("วันลาเกินโควตาที่กำหนด");
 
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
@@ -399,7 +400,21 @@
       await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]);
       
       hideLoader();
-      doneAndExit();
+      
+      // ✅ 1. ซ่อนแถบปุ่มกดด้านล่าง
+      $('bottomBar').classList.add('hidden');
+      
+      // ✅ 2. เปลี่ยนเนื้อหาในฟอร์มเป็นหน้า Success
+      $('formUI').innerHTML = `
+        <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
+          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
+          <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">โปรดทำรายการต่อในแชท</div>
+        </div>
+      `;
+      
+      // ✅ 3. หน่วงเวลา 1.5 วินาทีให้เห็นหน้า Success แล้วค่อยปิดหน้าต่าง
+      setTimeout(() => doneAndExit(), 1500);
       
     } catch (e) {
       hideLoader();
@@ -429,7 +444,7 @@
 
     // ดึงโปรไฟล์พนักงาน
     userProfile = await liff.getProfile();
-    $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}`;
+    $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}</span>`;
     if (userProfile.pictureUrl) { 
       $('profileImg').src = userProfile.pictureUrl; 
       $('avatarBox').classList.remove('hidden'); 
@@ -471,7 +486,4 @@
 </script>
 </body>
 </html>
-
-
-
 
