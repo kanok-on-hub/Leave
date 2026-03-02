@@ -136,7 +136,7 @@
       </div>
 
       <div class="bg-[#FEF2F2] rounded-xl p-4 mb-6">
-        <div class="text-xs font-bold text-[#B91C1C] mb-2">เหตุผล (Remark):</div>
+        <div class="text-xs font-bold text-[#B91C1C] mb-2">เหตุผลที่ไม่อนุมัติ:</div>
         <div class="text-sm text-[#7F1D1D] whitespace-pre-wrap leading-relaxed">${escapeHtml_(remark)}</div>
       </div>
 
@@ -214,7 +214,7 @@
     }
 
     try {
-      showLoader("กำลังบันทึกข้อมูล...");
+      showLoader("Saving...");
       if(btn) btn.disabled = true;
 
       const profile = await liff.getProfile();
@@ -237,8 +237,8 @@
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
-          <div class="text-xl font-bold text-[#1F2937]">บันทึกผลสำเร็จ</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">ระบบกำลังปิดหน้าต่างนี้...</div>
+          <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">Thank you</div>
         </div>
       `;
       
