@@ -336,7 +336,7 @@
 
     const st = String(r.status || "").toUpperCase();
     if (st && st !== "DRAFT") {
-      alert("แบบฟอร์มนี้ถูกยืนยันแล้ว\nไม่สามารถแก้ไขได้");
+      alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
       doneAndExit(); // ปิด LIFF
       return;
     }
