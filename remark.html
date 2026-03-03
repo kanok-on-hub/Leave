@@ -59,6 +59,21 @@
   }
   function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
 
+  // ✅ GUARD: กัน reject ถ้าไม่ใช่ SUBMITTED (กันทั้งเปิดหน้าและกดซ้ำ)
+  function guardRemarkPage_(mode, req) {
+    const st = String(req?.status || "").toUpperCase();
+
+    // Reject mode: ทำได้เฉพาะ SUBMITTED
+    if (mode === "reject") {
+      if (st !== "SUBMITTED") {
+        alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
+        doneAndExit();
+        return false;
+      }
+    }
+    return true;
+  }
+
   // 1. ฟังก์ชันทำ Req No สั้น
   function shortReqId(reqId) {
     const s = String(reqId || "");
@@ -155,7 +170,7 @@
     const shortReq = shortReqId(req.requestId || requestId);
     const dateText = formatLeaveRangeShort(req.startDate, req.endDate);
     
-    // 3. จัดการลิงก์ไฟล์แนบ
+    // จัดการลิงก์ไฟล์แนบ
     const attUrl = req.attachmentUrl ? String(req.attachmentUrl).trim() : "";
     const attachHtml = attUrl 
       ? `<a href="${escapeAttr_(attUrl)}" target="_blank" class="text-[#2563EB] underline decoration-[#2563EB]">คลิกเพื่อดูไฟล์</a>`
@@ -225,6 +240,16 @@
 
       const profile = await liff.getProfile();
 
+      // ✅ GUARD ซ้ำ: ดึงสถานะล่าสุดก่อน reject (กันเปิดค้างแล้วมีคนอนุมัติ/ปฏิเสธไปก่อน)
+      const latest = await getRequest_(requestId);
+      const latestStatus = String(latest?.request?.status || "").toUpperCase();
+      if (latestStatus !== "SUBMITTED") {
+        hideLoader();
+        alert("คำขอนี้ถูกดำเนินการแล้ว จึงไม่สามารถปฏิเสธซ้ำได้ค่ะ 🙂");
+        doneAndExit();
+        return;
+      }
+
       const data = await postFormUrlEncoded_({
         action: "reject_leave",
         requestId,
@@ -282,6 +307,9 @@
 
     if (!req) return renderNotFound_();
 
+    // ✅ GUARD: บล็อก reject ถ้าสถานะไม่ใช่ SUBMITTED
+    if (!guardRemarkPage_(mode, req)) return;
+
     if (mode === "view_remark") return renderViewRemark_(req, requestId);
     if (mode === "reject") return renderReject_(req, requestId);
 
@@ -296,3 +324,6 @@
 </script>
 </body>
 </html>
+
+
+
