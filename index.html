@@ -334,6 +334,13 @@
 
     const r = data.request;
 
+    const st = String(r.status || "").toUpperCase();
+    if (st && st !== "DRAFT") {
+      alert("แบบฟอร์มนี้ถูกยืนยันแล้วจึงไม่สามารถแก้ไขได้ค่ะ");
+      doneAndExit(); // ปิด LIFF
+      return;
+    }
+    
     const type = r.leaveType || "";
     if (type) {
       const btnMap = { Sick:0, Annual:1, Personal:2, Other:3 };
