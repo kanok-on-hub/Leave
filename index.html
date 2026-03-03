@@ -166,6 +166,24 @@
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
+  // ✅ NEW: register requester to All_Requester (non-blocking)
+  async function registerRequester_() {
+    try {
+      if (!userProfile || !userProfile.userId) return;
+
+      // fire-and-forget (but still awaitable)
+      await postFormUrlEncoded_({
+        action: "register_requester",
+        userId: userProfile.userId,
+        displayName: userProfile.displayName || "",
+        active: "Y"
+      });
+    } catch (e) {
+      // silent: never block UI
+      console.warn("register_requester failed:", e);
+    }
+  }
+
   // --- UI Functions ---
   function selectType(btn, val) {
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
@@ -408,10 +426,7 @@
       
       hideLoader();
       
-      // ✅ 1. ซ่อนแถบปุ่มกดด้านล่าง
       $('bottomBar').classList.add('hidden');
-      
-      // ✅ 2. เปลี่ยนเนื้อหาในฟอร์มเป็นหน้า Success
       $('formUI').innerHTML = `
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
@@ -420,7 +435,6 @@
         </div>
       `;
       
-      // ✅ 3. หน่วงเวลา 1.5 วินาทีให้เห็นหน้า Success แล้วค่อยปิดหน้าต่าง
       setTimeout(() => doneAndExit(), 1500);
       
     } catch (e) {
@@ -435,21 +449,18 @@
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
     
-    // บังคับล็อกอินถ้าจำเป็น
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
     const requestId = params.get("requestId");
 
-    // โยนไปหน้า remark.html ถ้าเป็นโหมด reject / view_remark
     if ((mode === "reject" || mode === "view_remark") && requestId) {
       const qs = new URLSearchParams({ mode, requestId }).toString();
       location.replace("remark.html?" + qs);
       return;
     }
 
-    // ดึงโปรไฟล์พนักงาน
     userProfile = await liff.getProfile();
     $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}</span>`;
     if (userProfile.pictureUrl) { 
@@ -457,21 +468,20 @@
       $('avatarBox').classList.remove('hidden'); 
     }
 
+    // NEW: auto register requester (do not block)
+    registerRequester_();
+
     const isEdit = (mode === "edit" && !!requestId);
 
     const today = new Date().toISOString().split('T')[0];
-    
-    // ล็อกปฏิทินไม่ให้เลือกย้อนหลัง เสมอ ทุกเคส!
     $('startDate').setAttribute("min", today);
     $('endDate').setAttribute("min", today);
 
-    // เซ็ตค่าเริ่มต้นเป็นวันนี้ (เฉพาะสร้างฟอร์มใหม่)
     if (!isEdit) {
       $('startDate').value = today; 
       $('endDate').value = today;
     }
 
-    // โหลดข้อมูลโควตาและวันหยุดแบบขนาน
     const pBalance = fetchLeaveBalance(userProfile.userId);
     const pHolidays = fetchHolidays();
 
@@ -493,4 +503,3 @@
 </script>
 </body>
 </html>
-
