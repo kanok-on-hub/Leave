@@ -24,11 +24,9 @@
 
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
 
-    /* ✅ compact date inputs on phones */
     .date-input { font-size: 0.85rem; padding: 0.6rem; border-radius: 0.75rem; }
     @media (min-width: 380px) { .date-input { font-size: 0.9rem; padding: 0.7rem; } }
 
-    /* ✅ submit disabled state */
     .btn-disabled { opacity: .55; cursor: not-allowed; }
     .subhint { font-size: 11px; font-weight: 600; color:#9CA3AF; text-align:center; margin-top:.5rem; }
 
@@ -128,13 +126,11 @@
 
       <div class="card bg-[#FFF7ED] border border-[#FFEDD5]">
         <div class="text-sm font-bold text-[#C2410C] mb-2">Attachment</div>
-
         <div class="space-y-1.5">
           <div class="text-[11px] text-[#EA580C] font-semibold flex items-start gap-1.5">
             <span class="text-xs mt-0.5">⚠️</span>
             <span>ลาป่วย ≥ 3 วันต้องแนบใบรับรองแพทย์</span>
           </div>
-
           <div class="text-[11px] text-[#EA580C] font-semibold flex items-start gap-1.5 leading-relaxed">
             <span class="text-xs mt-0.5">📎</span>
             <span>แนบไฟล์ในแชทได้เลย (JPG / PDF)</span>
@@ -164,17 +160,13 @@
   const LIFF_ID = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
 
-  // pages
   const LOGIN_PAGE = "login.html";
   const REMARK_PAGE = "remark.html";
 
-  // bootstrap cache (client)
   const BOOT_CACHE_KEY = "leave_boot_v1";
-  const BOOT_TTL_MS = 3 * 60 * 1000; // 3 min
+  const BOOT_TTL_MS = 3 * 60 * 1000;
 
-  // role cache (client)
   const ROLE_CACHE_KEY = "leave_onboard_v1";
-  // ======================
 
   let companyHolidays = [];
   let userProfile = null;
@@ -183,7 +175,7 @@
 
   const $ = (id) => document.getElementById(id);
 
-  function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
+  function showLoader(msg){ $("loaderText").textContent = msg || "Loading..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
@@ -191,7 +183,6 @@
     const btn = $("submitBtn");
     const hint = $("submitHint");
     if (!btn) return;
-
     btn.disabled = !enabled;
     btn.classList.toggle("btn-disabled", !enabled);
 
@@ -224,7 +215,8 @@
   }
 
   async function apiBootstrap_(userId){
-    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+    // ✅ no t= (let client cache + GAS cache do their job)
+    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId));
     return res.json();
   }
 
@@ -258,7 +250,6 @@
     `;
   }
 
-  // ✅ vNext-safe: capability check (fallback to legacy `role` if needed)
   function canRequesterFromBoot_(boot) {
     if (!boot) return false;
     if (typeof boot.canRequester === "boolean") return boot.canRequester;
@@ -307,10 +298,8 @@
     validateOnFly();
   }
 
-  // --- Data Fetching ---
   async function getRequest_(requestId) {
-    // ✅ compact for faster prefill
-    const res = await fetch(API_URL + "?action=get_request_compact&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
+    const res = await fetch(API_URL + "?action=get_request_compact&requestId=" + encodeURIComponent(requestId));
     return res.json();
   }
 
@@ -325,7 +314,6 @@
     return res.json();
   }
 
-  // --- Logic & Validation ---
   function updateRemainingUI() {
     const type = $('leaveTypeValue').value;
     const box = $('remainingBox');
@@ -425,7 +413,6 @@
     if (!data || !data.ok || !data.request) return;
 
     const r = data.request;
-
     const st = String(r.status || "").toUpperCase();
     if (st && st !== "DRAFT") {
       alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
@@ -455,11 +442,8 @@
     validateOnFly();
   }
 
-  // === Submit ===
   async function handleSubmit() {
-    if (!remainingReady) {
-      return alert("กำลังโหลดสิทธิ์คงเหลือ กรุณารอสักครู่ค่ะ");
-    }
+    if (!remainingReady) return alert("กำลังโหลดสิทธิ์คงเหลือ กรุณารอสักครู่ค่ะ");
 
     const type = $('leaveTypeValue').value;
     const startDate = $('startDate').value;
@@ -485,7 +469,7 @@
         action: "upsert_draft",
         requestId,
         userId: userProfile.userId,
-        name: userProfile.displayName, // line name
+        name: userProfile.displayName,
         leaveType: type,
         otherSpecify: otherSpec,
         startDate,
@@ -494,9 +478,7 @@
         reason
       });
 
-      if (!data || !data.ok || !data.requestId) {
-        throw new Error(data?.error || "ระบบขัดข้อง");
-      }
+      if (!data || !data.ok || !data.requestId) throw new Error(data?.error || "ระบบขัดข้อง");
 
       hideLoader();
       $('bottomBar').classList.add('hidden');
@@ -508,13 +490,8 @@
         </div>
       `;
 
-      try {
-        await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]);
-      } catch(e) {
-        console.warn("sendMessages failed:", e);
-      }
-
-      setTimeout(() => doneAndExit(), 1200);
+      try { await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]); } catch(e) {}
+      setTimeout(() => doneAndExit(), 900);
 
     } catch (e) {
       hideLoader();
@@ -523,21 +500,17 @@
     }
   }
 
-  // === Init ===
   async function init() {
-    // disable submit until remaining ready (required)
     setSubmitEnabled_(false, "กำลังโหลดสิทธิ์คงเหลือ…");
-
     showLoader("Loading...");
-    await liff.init({ liffId: LIFF_ID });
 
+    await liff.init({ liffId: LIFF_ID });
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
     const requestId = params.get("requestId");
 
-    // redirect to remark page for reject/view_remark
     if ((mode === "reject" || mode === "view_remark") && requestId) {
       const qs = new URLSearchParams({ mode, requestId }).toString();
       location.replace(REMARK_PAGE + "?" + qs);
@@ -545,50 +518,50 @@
     }
 
     userProfile = await liff.getProfile();
+
+    // header fill quickly
     $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}</span>`;
     if (userProfile.pictureUrl) {
       $('profileImg').src = userProfile.pictureUrl;
       $('avatarBox').classList.remove('hidden');
     }
 
-    // defaults (do not wait for bootstrap)
+    // set defaults immediately
     const isEdit = (mode === "edit" && !!requestId);
     const today = new Date().toISOString().split('T')[0];
     $('startDate').setAttribute("min", today);
     $('endDate').setAttribute("min", today);
     if (!isEdit) { $('startDate').value = today; $('endDate').value = today; }
 
-    // ✅ 1) apply cached boot first (perceived fast)
+    // apply cached boot instantly if available
     const cachedBoot = readBootCache_(userProfile.userId);
-    if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded) {
-      // Only apply UI data (holidays/balances) if requester capable or legacy role is requester
-      if (canRequesterFromBoot_(cachedBoot)) applyBootPayload_(cachedBoot);
+    if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded && canRequesterFromBoot_(cachedBoot)) {
+      applyBootPayload_(cachedBoot);
+      hideLoader(); // ✅ make it feel instant
     }
 
-    // ✅ 2) fetch bootstrap (single call)
+    // fetch bootstrap (always) to sync, but do not block if cache already applied
     let boot = null;
     try {
-      if (!(cachedBoot && cachedBoot.ok)) showLoader("Checking access...");
       boot = await apiBootstrap_(userProfile.userId);
     } catch (e) {
-      hideLoader();
       if (!cachedBoot) {
+        hideLoader();
         showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
-        return;
       }
-      if (!remainingReady) setSubmitEnabled_(false, "กำลังโหลดสิทธิ์คงเหลือ…");
       return;
     }
 
     if (!boot || !boot.ok) {
-      hideLoader();
-      if (!cachedBoot) showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+      if (!cachedBoot) {
+        hideLoader();
+        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+      }
       return;
     }
 
     writeBootCache_(userProfile.userId, boot);
 
-    // ✅ Gate: show login only if not onboarded
     if (!boot.onboarded) {
       writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
       hideLoader();
@@ -596,7 +569,6 @@
       return;
     }
 
-    // ✅ vNext: Requester capability (fallback to legacy `role`)
     if (!canRequesterFromBoot_(boot)) {
       const rolesText = (Array.isArray(boot.roles) && boot.roles.length) ? boot.roles.join(", ") : String(boot.role || "Approver");
       writeRoleCache_({
@@ -615,7 +587,6 @@
       return;
     }
 
-    // Save role cache (for other pages)
     writeRoleCache_({
       userId: userProfile.userId,
       onboarded:true,
@@ -630,9 +601,8 @@
 
     applyBootPayload_(boot);
 
-    // ✅ edit prefill (after remaining ready)
     if (isEdit) {
-      try { await prefillIfEdit_(); } catch (e) { console.error("Prefill err:", e); }
+      try { await prefillIfEdit_(); } catch(e) {}
     }
 
     validateOnFly();
