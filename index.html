@@ -25,14 +25,12 @@
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
 
     /* ✅ compact date inputs on phones */
-    .date-input {
-      font-size: 0.85rem;
-      padding: 0.6rem;
-      border-radius: 0.75rem;
-    }
-    @media (min-width: 380px) {
-      .date-input { font-size: 0.9rem; padding: 0.7rem; }
-    }
+    .date-input { font-size: 0.85rem; padding: 0.6rem; border-radius: 0.75rem; }
+    @media (min-width: 380px) { .date-input { font-size: 0.9rem; padding: 0.7rem; } }
+
+    /* ✅ submit disabled state */
+    .btn-disabled { opacity: .55; cursor: not-allowed; }
+    .subhint { font-size: 11px; font-weight: 600; color:#9CA3AF; text-align:center; margin-top:.5rem; }
 
     ::-webkit-scrollbar { display: none; }
   </style>
@@ -44,7 +42,7 @@
     <div class="bg-white px-6 pt-10 pb-4 rounded-b-3xl shadow-sm mb-5 relative z-10 border-b border-slate-100">
       <div class="flex items-center gap-4">
         <div id="avatarBox" class="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md ring-2 ring-blue-50 hidden">
-          <img id="profileImg" src="" class="w-full h-full object-cover">
+          <img id="profileImg" src="" class="w-full h-full object-cover" alt="profile">
         </div>
         <div>
           <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Leave Request 📝</h1>
@@ -150,6 +148,7 @@
         class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all">
         บันทึกร่าง
       </button>
+      <div id="submitHint" class="subhint hidden">กำลังโหลดสิทธิ์คงเหลือ…</div>
     </div>
 
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
@@ -167,6 +166,7 @@
 
   // pages
   const LOGIN_PAGE = "login.html";
+  const REMARK_PAGE = "remark.html";
 
   // bootstrap cache (client)
   const BOOT_CACHE_KEY = "leave_boot_v1";
@@ -179,12 +179,29 @@
   let companyHolidays = [];
   let userProfile = null;
   let leaveBalances = {};
+  let remainingReady = false;
 
   const $ = (id) => document.getElementById(id);
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
+
+  function setSubmitEnabled_(enabled, hintText) {
+    const btn = $("submitBtn");
+    const hint = $("submitHint");
+    if (!btn) return;
+
+    btn.disabled = !enabled;
+    btn.classList.toggle("btn-disabled", !enabled);
+
+    if (!enabled) {
+      hint.textContent = hintText || "กำลังโหลดสิทธิ์คงเหลือ…";
+      hint.classList.remove("hidden");
+    } else {
+      hint.classList.add("hidden");
+    }
+  }
 
   function writeRoleCache_(payload) {
     try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
@@ -241,6 +258,23 @@
     `;
   }
 
+  function applyBootPayload_(boot) {
+    if (!boot || !boot.ok) return;
+
+    if (Array.isArray(boot.holidays)) companyHolidays = boot.holidays;
+
+    leaveBalances = {};
+    (boot.balances || []).forEach(b => {
+      if (!b || !b.type) return;
+      leaveBalances[String(b.type)] = isNaN(Number(b.remaining)) ? 0 : Number(b.remaining);
+    });
+
+    remainingReady = true;
+    updateRemainingUI();
+    validateOnFly();
+    setSubmitEnabled_(true);
+  }
+
   // --- UI Functions ---
   function selectType(btn, val) {
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
@@ -267,7 +301,7 @@
 
   // --- Data Fetching ---
   async function getRequest_(requestId) {
-    // ✅ use compact for faster prefill
+    // ✅ compact for faster prefill
     const res = await fetch(API_URL + "?action=get_request_compact&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
     return res.json();
   }
@@ -415,6 +449,10 @@
 
   // === Submit ===
   async function handleSubmit() {
+    if (!remainingReady) {
+      return alert("กำลังโหลดสิทธิ์คงเหลือ กรุณารอสักครู่ค่ะ");
+    }
+
     const type = $('leaveTypeValue').value;
     const startDate = $('startDate').value;
     const endDate = $('endDate').value;
@@ -439,7 +477,7 @@
         action: "upsert_draft",
         requestId,
         userId: userProfile.userId,
-        name: userProfile.displayName,
+        name: userProfile.displayName, // line name
         leaveType: type,
         otherSpecify: otherSpec,
         startDate,
@@ -452,10 +490,8 @@
         throw new Error(data?.error || "ระบบขัดข้อง");
       }
 
-      await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]);
-
+      // perceived speed: render success UI first, then send message
       hideLoader();
-
       $('bottomBar').classList.add('hidden');
       $('formUI').innerHTML = `
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
@@ -465,7 +501,14 @@
         </div>
       `;
 
-      setTimeout(() => doneAndExit(), 1500);
+      // then send message (still awaited for reliability)
+      try {
+        await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]);
+      } catch(e) {
+        console.warn("sendMessages failed:", e);
+      }
+
+      setTimeout(() => doneAndExit(), 1200);
 
     } catch (e) {
       hideLoader();
@@ -476,6 +519,9 @@
 
   // === Init ===
   async function init() {
+    // disable submit until remaining ready (required)
+    setSubmitEnabled_(false, "กำลังโหลดสิทธิ์คงเหลือ…");
+
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
 
@@ -487,7 +533,7 @@
 
     if ((mode === "reject" || mode === "view_remark") && requestId) {
       const qs = new URLSearchParams({ mode, requestId }).toString();
-      location.replace("remark.html?" + qs);
+      location.replace(REMARK_PAGE + "?" + qs);
       return;
     }
 
@@ -498,72 +544,70 @@
       $('avatarBox').classList.remove('hidden');
     }
 
-    // ✅ Apply cached bootstrap first (perceived fast)
-    const cachedBoot = readBootCache_(userProfile.userId);
-    if (cachedBoot && cachedBoot.ok) {
-      if (Array.isArray(cachedBoot.holidays)) companyHolidays = cachedBoot.holidays;
-      leaveBalances = {};
-      (cachedBoot.balances || []).forEach(b => { if (b?.type) leaveBalances[String(b.type)] = Number(b.remaining) || 0; });
-      updateRemainingUI();
-      validateOnFly();
-    }
-
-    // ✅ Fetch bootstrap (single call)
-    let boot = null;
-    try {
-      showLoader("Checking access...");
-      boot = await apiBootstrap_(userProfile.userId);
-    } catch (e) {
-      if (!cachedBoot) {
-        hideLoader();
-        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
-        return;
-      }
-      boot = null;
-    }
-
-    if (boot && boot.ok) {
-      writeBootCache_(userProfile.userId, boot);
-
-      if (!boot.onboarded) {
-        writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
-        hideLoader();
-        redirectToLogin_();
-        return;
-      }
-
-      const role = String(boot.role || "");
-      writeRoleCache_({
-        userId: userProfile.userId,
-        onboarded:true,
-        role,
-        name: String(boot.name||""),
-        nickname: String(boot.nickname||""),
-        ts: Date.now()
-      });
-
-      if (role.toLowerCase() !== "requester") {
-        hideLoader();
-        showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + role + " จึงไม่สามารถใช้งานหน้านี้ได้");
-        return;
-      }
-
-      companyHolidays = Array.isArray(boot.holidays) ? boot.holidays : [];
-      leaveBalances = {};
-      (boot.balances || []).forEach(b => { if (b?.type) leaveBalances[String(b.type)] = Number(b.remaining) || 0; });
-    }
-
+    // defaults (do not wait for bootstrap)
     const isEdit = (mode === "edit" && !!requestId);
-
     const today = new Date().toISOString().split('T')[0];
     $('startDate').setAttribute("min", today);
     $('endDate').setAttribute("min", today);
+    if (!isEdit) { $('startDate').value = today; $('endDate').value = today; }
 
-    if (!isEdit) {
-      $('startDate').value = today;
-      $('endDate').value = today;
+    // ✅ 1) apply cached boot first (perceived fast)
+    const cachedBoot = readBootCache_(userProfile.userId);
+    if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded) {
+      applyBootPayload_(cachedBoot);
     }
 
+    // ✅ 2) fetch bootstrap (single call)
+    let boot = null;
+    try {
+      // don't spam loader if cache already applied
+      if (!(cachedBoot && cachedBoot.ok)) showLoader("Checking access...");
+      boot = await apiBootstrap_(userProfile.userId);
+    } catch (e) {
+      hideLoader();
+      if (!cachedBoot) {
+        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+        return;
+      }
+      // keep cache; still need remainingReady to be true
+      if (!remainingReady) setSubmitEnabled_(false, "กำลังโหลดสิทธิ์คงเหลือ…");
+      return;
+    }
+
+    if (!boot || !boot.ok) {
+      hideLoader();
+      if (!cachedBoot) showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+      return;
+    }
+
+    writeBootCache_(userProfile.userId, boot);
+
+    if (!boot.onboarded) {
+      writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
+      hideLoader();
+      redirectToLogin_();
+      return;
+    }
+
+    const role = String(boot.role || "");
+    writeRoleCache_({
+      userId: userProfile.userId,
+      onboarded:true,
+      role,
+      name: String(boot.name||""),
+      nickname: String(boot.nickname||""),
+      ts: Date.now()
+    });
+
+    if (role.toLowerCase() !== "requester") {
+      hideLoader();
+      showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + role + " จึงไม่สามารถใช้งานหน้านี้ได้");
+      return;
+    }
+
+    applyBootPayload_(boot);
+
+    // ✅ edit prefill (after role+remaining ready; still using compact endpoint)
     if (isEdit) {
       try { await prefillIfEdit_(); } catch (e) { console.error("Prefill err:", e); }
     }
@@ -580,5 +624,6 @@
 </script>
 </body>
 </html>
+
 
 
