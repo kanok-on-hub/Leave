@@ -215,7 +215,6 @@
   }
 
   async function apiBootstrap_(userId){
-    // ✅ no t= (let client cache + GAS cache do their job)
     const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId));
     return res.json();
   }
@@ -274,7 +273,6 @@
     setSubmitEnabled_(true);
   }
 
-  // --- UI Functions ---
   function selectType(btn, val) {
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
@@ -518,45 +516,33 @@
     }
 
     userProfile = await liff.getProfile();
-
-    // header fill quickly
     $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}</span>`;
     if (userProfile.pictureUrl) {
       $('profileImg').src = userProfile.pictureUrl;
       $('avatarBox').classList.remove('hidden');
     }
 
-    // set defaults immediately
     const isEdit = (mode === "edit" && !!requestId);
     const today = new Date().toISOString().split('T')[0];
     $('startDate').setAttribute("min", today);
     $('endDate').setAttribute("min", today);
     if (!isEdit) { $('startDate').value = today; $('endDate').value = today; }
 
-    // apply cached boot instantly if available
     const cachedBoot = readBootCache_(userProfile.userId);
     if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded && canRequesterFromBoot_(cachedBoot)) {
       applyBootPayload_(cachedBoot);
-      hideLoader(); // ✅ make it feel instant
+      hideLoader();
     }
 
-    // fetch bootstrap (always) to sync, but do not block if cache already applied
     let boot = null;
-    try {
-      boot = await apiBootstrap_(userProfile.userId);
-    } catch (e) {
-      if (!cachedBoot) {
-        hideLoader();
-        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
-      }
+    try { boot = await apiBootstrap_(userProfile.userId); }
+    catch (e) {
+      if (!cachedBoot) { hideLoader(); showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง"); }
       return;
     }
 
     if (!boot || !boot.ok) {
-      if (!cachedBoot) {
-        hideLoader();
-        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
-      }
+      if (!cachedBoot) { hideLoader(); showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง"); }
       return;
     }
 
