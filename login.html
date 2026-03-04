@@ -19,38 +19,10 @@
 
     .role-btn { width:100%; text-align:left; padding:1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#6B7280; transition:.2s; position:relative; }
     .role-btn:active { transform: scale(.98); }
-    .role-btn.selected { border-color:#3B82F6; background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:700; }
+    .role-btn.selected { border-color:#3B82F6; background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:600; }
     .role-btn.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563EB; font-weight:bold; }
 
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
-
-    /* Info callout (match screenshot style vibe) */
-    .info-callout {
-      background:#EFF6FF;
-      border:1px solid #DBEAFE;
-      border-radius: 0.9rem;
-      padding: 0.75rem 0.9rem;
-      display:flex;
-      gap:0.6rem;
-      align-items:flex-start;
-    }
-    .info-icon {
-      width:22px; height:22px;
-      border-radius: 6px;
-      display:flex; align-items:center; justify-content:center;
-      background:#3B82F6;
-      color:#fff;
-      font-weight:800;
-      font-size: 13px;
-      flex: 0 0 auto;
-      margin-top: 1px;
-    }
-    .info-text {
-      font-size: 12px;
-      color:#1D4ED8;
-      font-weight: 600;
-      line-height: 1.35;
-    }
 
     ::-webkit-scrollbar { display: none; }
   </style>
@@ -59,14 +31,14 @@
 <body class="pb-24 antialiased">
   <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
 
-    <!-- Header -->
-    <div class="bg-white px-6 pt-10 pb-6 rounded-b-3xl shadow-sm mb-6 relative z-10 border-b border-slate-100">
+    <!-- Header (match index.html) -->
+    <div class="bg-white px-6 pt-10 pb-4 rounded-b-3xl shadow-sm mb-5 relative z-10 border-b border-slate-100">
       <div class="flex items-center gap-4">
         <div id="avatarBox" class="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md ring-2 ring-blue-50 hidden">
           <img id="profileImg" src="" class="w-full h-full object-cover" alt="profile">
         </div>
         <div class="flex-1">
-          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">ลงทะเบียน 🔐</h1>
+          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Login 🔐</h1>
           <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-0.5 flex items-center gap-1">
             <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
           </p>
@@ -96,20 +68,19 @@
   </div>
 
 <script>
-  // ======= CONFIG (ให้ใช้ค่าเดียวกับหน้าเดิม) =======
+  // ======= CONFIG =======
   const LIFF_ID  = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
 
-  // localStorage cache
   const ROLE_CACHE_KEY = "leave_onboard_v1";
   const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-  // ===============================================
+  // ======================
 
   const $ = (id) => document.getElementById(id);
 
   let userProfile = null;
-  let existingRole = "";     // "Requester" | "Approver"
   let onboarded = false;
+  let existingRole = ""; // Requester|Approver
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
@@ -134,6 +105,10 @@
   function writeRoleCache_(payload) {
     try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
   }
+  function cacheFresh_(obj) {
+    if (!obj || !obj.ts) return false;
+    return (Date.now() - Number(obj.ts || 0)) <= ROLE_CACHE_TTL_MS;
+  }
 
   // -------- API helpers --------
   async function apiCheckUser_(userId) {
@@ -154,10 +129,9 @@
 
   // -------- UI helpers --------
   function setHeader_(title, subtitle) {
-    $("title").textContent = title || "ลงทะเบียน 🔐";
+    $("title").textContent = title || "Login 🔐";
     $("subTitle").innerHTML = subtitle || "";
   }
-
   function setRoleBadge_(role) {
     const b = $("roleBadge");
     if (!role) { b.classList.add("hidden"); return; }
@@ -165,25 +139,33 @@
     b.classList.remove("hidden");
   }
 
-  // -------- UI screens --------
+  // -------- Screens --------
   function renderFirstTime_() {
     onboarded = false;
     existingRole = "";
 
-    setHeader_("ลงทะเบียน 🔐", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "there")}</span>`);
+    setHeader_("Login 🔐", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "there")}</span>`);
     setRoleBadge_("");
 
     $("rootBox").innerHTML = `
-      <div class="card space-y-3">
+      <div class="card space-y-4">
         <div>
-          <div class="text-sm font-bold text-[#1F2937] mb-2">Full Name <span class="text-[#EF4444]">*</span></div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
           <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" />
           <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
         </div>
 
         <div>
-          <div class="text-sm font-bold text-[#1F2937] mb-2">Nickname</div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
           <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น (ถ้ามี)" />
+        </div>
+
+        <!-- ✅ info box style same as index.html -->
+        <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+          <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
+          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+            Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)
+          </div>
         </div>
       </div>
 
@@ -195,25 +177,17 @@
         <div class="grid grid-cols-1 gap-3">
           <button type="button" class="role-btn" onclick="selectRole_('Requester', this)">
             <div class="text-2xl mb-1">📝</div>
-            <div class="text-sm font-bold">Requester</div>
-            <div class="text-[11px] mt-1 text-[#9CA3AF] font-medium">ยื่นใบลา (ใช้งานฟอร์มลา)</div>
+            <span class="text-sm font-medium">Requester</span>
           </button>
 
           <button type="button" class="role-btn" onclick="selectRole_('Approver', this)">
             <div class="text-2xl mb-1">✅</div>
-            <div class="text-sm font-bold">Approver</div>
-            <div class="text-[11px] mt-1 text-[#9CA3AF] font-medium">ผู้อนุมัติ (กดอนุมัติ/ปฏิเสธ)</div>
+            <span class="text-sm font-medium">Approver</span>
           </button>
         </div>
 
         <input type="hidden" id="roleValue" value="">
         <div id="roleErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1">กรุณาเลือก Role</div>
-
-        <!-- ✅ Info callout (instead of Important/warning card) -->
-        <div class="info-callout">
-          <div class="info-icon">i</div>
-          <div class="info-text">Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)</div>
-        </div>
       </div>
     `;
 
@@ -226,11 +200,11 @@
     onboarded = true;
     existingRole = String(role || "").trim();
 
-    setHeader_("ยืนยันตัวตนแล้ว ✅", `Role ถูกล็อกแล้ว`);
+    setHeader_("Account Verified ✅", `Role is locked`);
     setRoleBadge_(existingRole || "-");
 
-    const safeName = (name || "").trim();
-    const safeNick = (nickname || "").trim();
+    const safeName = String(name || "").trim();
+    const safeNick = String(nickname || "").trim();
 
     $("rootBox").innerHTML = `
       <div class="card text-center py-7 border border-[#10B981] shadow-lg shadow-green-100">
@@ -239,21 +213,24 @@
         <div class="text-sm text-[#9CA3AF] mt-1">Role: <span class="font-bold text-[#1F2937]">${escapeHtml_(existingRole || "-")}</span></div>
       </div>
 
-      <div class="card space-y-3">
+      <div class="card space-y-4">
         <div>
-          <div class="text-sm font-bold text-[#1F2937] mb-2">Full Name <span class="text-[#EF4444]">*</span></div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
           <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" value="${escapeHtml_(safeName)}" />
           <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
         </div>
 
         <div>
-          <div class="text-sm font-bold text-[#1F2937] mb-2">Nickname</div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
           <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น (ถ้ามี)" value="${escapeHtml_(safeNick)}" />
         </div>
 
-        <div class="info-callout">
-          <div class="info-icon">i</div>
-          <div class="info-text">Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)</div>
+        <!-- ✅ info box style same as index.html -->
+        <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+          <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
+          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+            Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)
+          </div>
         </div>
       </div>
     `;
@@ -295,10 +272,7 @@
     $("fullName")?.classList.add("err");
     $("fullName")?.addEventListener("input", clearNameErr_, { once: true });
   }
-
-  function showRoleErr_() {
-    $("roleErr")?.classList.remove("hidden");
-  }
+  function showRoleErr_() { $("roleErr")?.classList.remove("hidden"); }
 
   // -------- Submit --------
   async function handleSubmit() {
@@ -306,31 +280,23 @@
       const fullName = ($("fullName")?.value || "").trim();
       const nickname = ($("nickname")?.value || "").trim();
 
-      if (!fullName) {
-        showNameErr_();
-        return;
-      }
+      if (!fullName) { showNameErr_(); return; }
 
-      // if onboarded already, role is locked (use existingRole)
-      let role = onboarded ? existingRole : ($("roleValue")?.value || "").trim();
-      if (!role) {
-        showRoleErr_();
-        return;
-      }
+      // role locked if onboarded already
+      const role = onboarded ? existingRole : ($("roleValue")?.value || "").trim();
+      if (!role) { showRoleErr_(); return; }
 
       showLoader("Saving...");
       $("submitBtn").disabled = true;
 
-      const payload = {
+      const data = await postFormUrlEncoded_({
         action: "register_user",
         userId: userProfile.userId,
         displayName: userProfile.displayName || "",
         fullName: fullName,
-        nickname: nickname,     // ✅ NEW (backend can ignore until you add)
+        nickname: nickname,
         role: role
-      };
-
-      const data = await postFormUrlEncoded_(payload);
+      });
 
       if (!data || !data.ok) {
         const err = String(data?.error || "unknown_error");
@@ -350,8 +316,8 @@
         return;
       }
 
-      // update cache immediately for speed in other pages
       const newRole = String(data?.role || role || "").trim();
+
       writeRoleCache_({
         userId: userProfile.userId,
         onboarded: true,
@@ -363,7 +329,6 @@
 
       hideLoader();
 
-      // success screen
       $("bottomBar").classList.add("hidden");
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
@@ -372,7 +337,6 @@
           <div class="text-sm text-[#9CA3AF] mt-2">กำลังปิดหน้าต่าง...</div>
         </div>
       `;
-
       setTimeout(() => doneAndExit(), 1100);
 
     } catch (e) {
@@ -397,9 +361,9 @@
       $("avatarBox").classList.remove("hidden");
     }
 
-    // fast UI from cache
+    // fast UI from cache (optional)
     const cached = readRoleCache_(userProfile.userId);
-    const cacheFresh = cached && (Date.now() - Number(cached.ts || 0) <= ROLE_CACHE_TTL_MS);
+    const fresh = cacheFresh_(cached);
 
     if (cached && cached.onboarded && cached.role) {
       renderAlreadyRegistered_(cached.role, cached.name || "", cached.nickname || "");
@@ -410,7 +374,6 @@
     // verify with backend
     try {
       const res = await apiCheckUser_(userProfile.userId);
-
       if (!res || !res.ok) throw new Error(String(res?.error || "check_user_failed"));
 
       if (!res.onboarded) {
@@ -421,7 +384,6 @@
 
       const role = String(res.role || "").trim();
       const name = String(res.name || "").trim();
-      // backend อาจยังไม่ส่ง nickname ใน check_user ได้ — fallback จาก cache/ว่าง
       const nick = String(res.nickname || (cached?.nickname || "")).trim();
 
       writeRoleCache_({
@@ -440,8 +402,8 @@
     } catch (e) {
       hideLoader();
 
-      // ถ้า cache fresh และ onboarded ให้ใช้ต่อไปได้ (ไม่บังคับ)
-      if (cacheFresh && cached?.onboarded && cached?.role) {
+      // if cache is fresh and onboarded, keep it
+      if (fresh && cached?.onboarded && cached?.role) {
         console.warn("check_user failed, using cache:", e);
         return;
       }
@@ -460,5 +422,4 @@
 
 </body>
 </html>
-
 
