@@ -154,13 +154,8 @@
   // ======= CONFIG =======
   const LIFF_ID = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
-
-  // Login page (GitHub Pages)
   const LOGIN_PAGE = "login.html";
-
-  // localStorage cache for onboarding/role
   const ROLE_CACHE_KEY = "leave_onboard_v1";
-  const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
   // ======================
 
   let companyHolidays = [];
@@ -173,22 +168,9 @@
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
-  // ---------- Onboarding cache ----------
-  function readRoleCache_(userId) {
-    try {
-      const raw = localStorage.getItem(ROLE_CACHE_KEY);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      if (!obj || obj.userId !== userId) return null;
-      return obj;
-    } catch(e) { return null; }
-  }
+  // ---------- localStorage cache ----------
   function writeRoleCache_(payload) {
     try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
-  }
-  function isCacheFresh_(obj) {
-    if (!obj || !obj.ts) return false;
-    return (Date.now() - Number(obj.ts || 0)) <= ROLE_CACHE_TTL_MS;
   }
 
   async function apiCheckUser_(userId) {
@@ -198,8 +180,7 @@
 
   function redirectToLogin_() {
     const ret = location.pathname + location.search;
-    const url = LOGIN_PAGE + "?return=" + encodeURIComponent(ret);
-    location.replace(url);
+    location.replace(LOGIN_PAGE + "?return=" + encodeURIComponent(ret));
   }
 
   function showAccessDenied_(msg) {
@@ -214,64 +195,17 @@
     `;
   }
 
-  // Non-blocking refresh (for speed)
-  async function refreshOnboardCacheNonBlocking_() {
-    try {
-      if (!userProfile?.userId) return;
-      const r = await apiCheckUser_(userProfile.userId);
-      if (!r || !r.ok) return;
-
-      if (!r.onboarded) {
-        writeRoleCache_({ userId: userProfile.userId, onboarded: false, ts: Date.now() });
-        return;
-      }
-
-      writeRoleCache_({
-        userId: userProfile.userId,
-        onboarded: true,
-        role: String(r.role || ""),
-        name: String(r.name || ""),
-        ts: Date.now()
-      });
-    } catch(e) {
-      // silent
-      console.warn("check_user failed:", e);
-    }
-  }
-
-  // Block only when needed (submit-time enforcement)
-  async function ensureRequesterReady_() {
-    const uid = userProfile?.userId;
-    if (!uid) return { ok:false, error:"missing_userId" };
-
-    const cached = readRoleCache_(uid);
-
-    // If cached onboarded+Requester, good
-    if (cached?.onboarded && String(cached.role).toLowerCase() === "requester") {
-      return { ok:true, role:"Requester" };
-    }
-
-    // Otherwise, do a blocking check (submit-time only)
-    try {
-      const r = await apiCheckUser_(uid);
-      if (!r || !r.ok) return { ok:false, error: String(r?.error || "check_user_failed") };
-
-      if (!r.onboarded) {
-        writeRoleCache_({ userId: uid, onboarded:false, ts: Date.now() });
-        return { ok:false, error:"not_onboarded" };
-      }
-
-      const role = String(r.role || "");
-      writeRoleCache_({ userId: uid, onboarded:true, role, name: String(r.name||""), ts: Date.now() });
-
-      if (role.toLowerCase() !== "requester") {
-        return { ok:false, error:"role_mismatch", role };
-      }
-
-      return { ok:true, role:"Requester" };
-    } catch(e) {
-      return { ok:false, error:"network_error" };
-    }
+  function showSystemError_(msg) {
+    $("bottomBar").classList.add("hidden");
+    $("formUI").innerHTML = `
+      <div class="card text-center py-10 mt-6">
+        <div class="text-4xl mb-3">⚠️</div>
+        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง"}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
+        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
+      </div>
+    `;
   }
 
   // --- UI Functions ---
@@ -388,7 +322,6 @@
 
     let days = calcWorkingDays(s, e);
 
-    // Auto lock half-day for >1 day
     const durBtns = document.querySelectorAll('.dur-btn');
     if (days > 1) {
       if ($('durationValue').value !== 'Full Day') selectDur(durBtns[0], 'Full Day');
@@ -407,7 +340,6 @@
     badge.textContent = `Working: ${days} ${days <= 1 ? "Day" : "Days"}`;
     badge.classList.remove('hidden');
 
-    // Remaining check
     const remaining = (type && leaveBalances[type] != null) ? leaveBalances[type] : null;
     if (type && remaining != null && days > 0 && days > remaining) {
       $('startDate').classList.add('err');
@@ -441,11 +373,10 @@
     if (!data || !data.ok || !data.request) return;
 
     const r = data.request;
-
     const st = String(r.status || "").toUpperCase();
     if (st && st !== "DRAFT") {
       alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
-      doneAndExit(); // ปิด LIFF
+      doneAndExit();
       return;
     }
 
@@ -458,8 +389,6 @@
     }
 
     $('otherSpecify').value = r.otherSpecify || "";
-
-    // ตั้งค่า Date
     $('startDate').value = toDateInputValue_(r.startDate) || $('startDate').value;
     $('endDate').value = toDateInputValue_(r.endDate) || $('endDate').value;
 
@@ -475,22 +404,6 @@
 
   // === Submit ===
   async function handleSubmit() {
-    // Enforce onboarding/role at submit-time (min latency on open)
-    const guard = await ensureRequesterReady_();
-    if (!guard.ok) {
-      if (guard.error === "not_onboarded") {
-        alert("กรุณา Login / Setup ก่อนใช้งานค่ะ");
-        redirectToLogin_();
-        return;
-      }
-      if (guard.error === "role_mismatch") {
-        showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + (guard.role || "Approver") + " จึงไม่สามารถใช้งานหน้านี้ได้");
-        return;
-      }
-      alert("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
-      return;
-    }
-
     const type = $('leaveTypeValue').value;
     const startDate = $('startDate').value;
     const endDate = $('endDate').value;
@@ -550,7 +463,7 @@
     }
   }
 
-  // === Init ===
+  // === Init (STRICT) ===
   async function init() {
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
@@ -561,6 +474,7 @@
     const mode = params.get("mode");
     const requestId = params.get("requestId");
 
+    // route to remark page if needed
     if ((mode === "reject" || mode === "view_remark") && requestId) {
       const qs = new URLSearchParams({ mode, requestId }).toString();
       location.replace("remark.html?" + qs);
@@ -574,16 +488,49 @@
       $('avatarBox').classList.remove('hidden');
     }
 
-    // Fast role check via cache (avoid slowing open)
-    const cached = readRoleCache_(userProfile.userId);
-    if (cached?.onboarded && String(cached.role || "").toLowerCase() === "approver") {
+    // ✅ STRICT: block until check_user confirms onboarded & role=Requester
+    showLoader("Checking access...");
+    let chk = null;
+    try {
+      chk = await apiCheckUser_(userProfile.userId);
+    } catch (e) {
       hideLoader();
-      showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น Approver จึงไม่สามารถใช้งานหน้านี้ได้");
+      showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
       return;
     }
 
-    // Refresh role cache in background (non-blocking)
-    refreshOnboardCacheNonBlocking_();
+    if (!chk || !chk.ok) {
+      hideLoader();
+      if (String(chk?.error || "") === "role_conflict") {
+        showSystemError_("พบข้อมูลซ้ำซ้อนในระบบ (Requester/Approver) กรุณาติดต่อแอดมินค่ะ");
+        return;
+      }
+      showSystemError_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง");
+      return;
+    }
+
+    if (!chk.onboarded) {
+      // strict: always go login if not onboarded
+      writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
+      hideLoader();
+      redirectToLogin_();
+      return;
+    }
+
+    const role = String(chk.role || "");
+    writeRoleCache_({
+      userId: userProfile.userId,
+      onboarded: true,
+      role: role,
+      name: String(chk.name || ""),
+      ts: Date.now()
+    });
+
+    if (role.toLowerCase() !== "requester") {
+      hideLoader();
+      showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + role + " จึงไม่สามารถใช้งานหน้านี้ได้");
+      return;
+    }
 
     const isEdit = (mode === "edit" && !!requestId);
 
@@ -612,8 +559,11 @@
   init().catch(err => {
     console.error(err);
     hideLoader();
-    alert("LIFF Init Error: " + (err.message || err));
+    showSystemError_("LIFF Init Error: " + (err.message || err));
   });
 </script>
 </body>
 </html>
+
+
+
