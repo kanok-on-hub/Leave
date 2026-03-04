@@ -232,7 +232,7 @@
           ${kvRow_("Name", escapeHtml_(fullNameNick))}
           ${kvRow_("Type", escapeHtml_(req.leaveType || "-"))}
           ${kvRow_("Date", escapeHtml_(dateText))}
-          ${kvRow_("Days", escapeHtml_(String(req.leaveDays ?? "-")))}
+          ${kvRow_("Days", escapeHtml_(`${req.leaveDays ?? "-"} วัน`))}
           ${kvRow_("Reason", escapeHtml_(req.reason || "-"))}
           ${kvRow_("Attach", attachHtml)}
         </div>
