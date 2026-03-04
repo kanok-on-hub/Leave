@@ -125,20 +125,23 @@
   }
 
   function formatLeaveRangeShort_(startVal, endVal) {
-    if (!startVal || !endVal) return "-";
-    const s = new Date(startVal);
-    const e = new Date(endVal);
-    if (isNaN(s) || isNaN(e)) return `${startVal} → ${endVal}`;
+  if (!startVal || !endVal) return "-";
+  const s = new Date(startVal);
+  const e = new Date(endVal);
+  if (isNaN(s) || isNaN(e)) return `${startVal} → ${endVal}`;
 
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const sd = s.getDate(), sm = months[s.getMonth()], sy = s.getFullYear();
-    const ed = e.getDate(), em = months[e.getMonth()], ey = e.getFullYear();
+  const mTH = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 
-    if (s.getTime() === e.getTime() || (sd === ed && sm === em && sy === ey)) return `${sd} ${sm} ${sy}`;
-    if (sm === em && sy === ey) return `${sd}-${ed} ${sm} ${sy}`;
-    if (sy === ey) return `${sd} ${sm} - ${ed} ${em} ${sy}`;
-    return `${sd} ${sm} ${String(sy).slice(-2)} - ${ed} ${em} ${String(ey).slice(-2)}`;
-  }
+  const sd = s.getDate(), sm = mTH[s.getMonth()], sy = s.getFullYear() + 543;
+  const ed = e.getDate(), em = mTH[e.getMonth()], ey = e.getFullYear() + 543;
+
+  const sameDay = (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth() && s.getDate() === e.getDate());
+
+  if (sameDay) return `${sd} ${sm} ${sy}`;
+  if (sm === em && sy === ey) return `${sd}-${ed} ${sm} ${sy}`;
+  if (sy === ey) return `${sd} ${sm} - ${ed} ${em} ${sy}`;
+  return `${sd} ${sm} ${sy} - ${ed} ${em} ${ey}`;
+}
 
   function formatFullNameNick_(fullName, nickname){
     const fn = String(fullName || "").trim();
