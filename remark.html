@@ -13,12 +13,13 @@
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
 
-    /* นำสไตล์ Input จากหน้า Index มาใช้คุมโทน */
+    /* Input style (match index.html) */
     .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
     .input:focus { background:#fff; border-color:#F87171; box-shadow:0 0 0 3px rgba(248,113,113,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
 
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
+
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
@@ -55,6 +56,10 @@
   // localStorage cache for onboarding/role
   const ROLE_CACHE_KEY = "leave_onboard_v1";
   const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+  // ✅ NEW: person cache (requester) to reduce extra calls
+  const PERSON_CACHE_KEY = "leave_person_v1";
+  const PERSON_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
   // ======================
 
   const $ = (id) => document.getElementById(id);
@@ -64,7 +69,9 @@
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
   function escapeHtml_(s) {
-    return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    return String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
 
@@ -93,9 +100,40 @@
     return (Date.now() - Number(obj.ts || 0)) <= ROLE_CACHE_TTL_MS;
   }
 
+  // ---------- Person cache (Requester/Any user) ----------
+  function personKey_(userId){ return `${PERSON_CACHE_KEY}:${userId || ""}`; }
+  function readPersonCache_(userId){
+    try{
+      const raw = localStorage.getItem(personKey_(userId));
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(!obj || !obj.ts) return null;
+      if(Date.now() - Number(obj.ts||0) > PERSON_CACHE_TTL_MS) return null;
+      return obj.data || null;
+    }catch(e){ return null; }
+  }
+  function writePersonCache_(userId, data){
+    try{
+      localStorage.setItem(personKey_(userId), JSON.stringify({ ts: Date.now(), data: data || null }));
+    }catch(e){}
+  }
+
   async function apiCheckUser_(userId) {
     const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
     return res.json();
+  }
+
+  // ✅ NEW: get person's FullName/Nickname by userId (requires backend support)
+  // Expected response:
+  //  { ok:true, person:{ userId, role:"Requester|Approver|", fullName:"", nickname:"", displayName:"" } }
+  async function apiGetPerson_(userId) {
+    const cached = readPersonCache_(userId);
+    if (cached) return { ok:true, person: cached, cached:true };
+
+    const res = await fetch(API_URL + "?action=get_person&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+    const data = await res.json();
+    if (data && data.ok && data.person) writePersonCache_(userId, data.person);
+    return data;
   }
 
   function redirectToLogin_() {
@@ -134,7 +172,6 @@
   // ✅ GUARD: กัน reject ถ้าไม่ใช่ SUBMITTED (กันทั้งเปิดหน้าและกดซ้ำ)
   function guardRemarkPage_(mode, req) {
     const st = String(req?.status || "").toUpperCase();
-
     if (mode === "reject") {
       if (st !== "SUBMITTED") {
         alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
@@ -145,13 +182,13 @@
     return true;
   }
 
-  // 1. ฟังก์ชันทำ Req No สั้น
+  // Req No short
   function shortReqId(reqId) {
     const s = String(reqId || "");
     return "#" + (s.length <= 8 ? s : s.slice(-8));
   }
 
-  // 2. ฟังก์ชันทำ Date Range สั้น (เหมือนใน GAS)
+  // Date range short
   function formatLeaveRangeShort(startVal, endVal) {
     if (!startVal || !endVal) return "-";
     const s = new Date(startVal);
@@ -168,7 +205,16 @@
     return `${sd} ${sm} ${String(sy).slice(-2)} - ${ed} ${em} ${String(ey).slice(-2)}`;
   }
 
-  // Helper สำหรับสร้างบรรทัดข้อมูลเหมือน Flex (Label กว้างคงที่ ชิดซ้าย)
+  // Full Name (Nickname)
+  function formatFullNameNick_(fullName, nickname){
+    const fn = String(fullName || "").trim();
+    const nn = String(nickname || "").trim();
+    if (!fn && !nn) return "-";
+    if (fn && nn) return `${fn} (${nn})`;
+    return fn || nn;
+  }
+
+  // Helper rows
   function kvRow(label, valueHtml) {
     return `
       <div class="flex items-baseline space-x-3">
@@ -194,10 +240,19 @@
     return res.json();
   }
 
-  // === โหมด 1: พนักงานดูเหตุผลที่โดนปฏิเสธ ===
-  function renderViewRemark_(req, requestId) {
+  // === Mode: view remark ===
+  async function renderViewRemark_(req, requestId) {
     const remark = (req.remark || "").toString().trim() || "-";
     const shortReq = shortReqId(req.requestId || requestId);
+
+    // requester identity (from request.userId)
+    let fullNameNick = "-";
+    try {
+      const p = await apiGetPerson_(req.userId);
+      if (p && p.ok && p.person) fullNameNick = formatFullNameNick_(p.person.fullName, p.person.nickname);
+    } catch(e) {}
+
+    const lineName = String(req.name || "-");
 
     $("title").textContent = "Remark Details";
     $("subTitle").textContent = "เหตุผลที่ไม่อนุมัติ";
@@ -210,6 +265,13 @@
          <div class="text-xs text-[#9CA3AF] mt-1 font-mono">Req No. ${escapeHtml_(shortReq)}</div>
       </div>
 
+      <div class="card mb-5">
+        <div class="space-y-3 px-1">
+          ${kvRow("Line", escapeHtml_(lineName))}
+          ${kvRow("Full Name", escapeHtml_(fullNameNick))}
+        </div>
+      </div>
+
       <div class="bg-[#FFF5F5] border border-[#FEE2E2] rounded-xl p-4 mb-6">
         <div class="text-xs font-bold text-[#BE123C] mb-2">เหตุผลที่ไม่อนุมัติ:</div>
         <div class="text-sm text-[#9F1239] whitespace-pre-wrap leading-relaxed">${escapeHtml_(remark)}</div>
@@ -219,8 +281,8 @@
     `;
   }
 
-  // === โหมด 2: หัวหน้ากดปฏิเสธและกรอกเหตุผล ===
-  function renderReject_(req, requestId) {
+  // === Mode: reject ===
+  async function renderReject_(req, requestId) {
     const shortReq = shortReqId(req.requestId || requestId);
     const dateText = formatLeaveRangeShort(req.startDate, req.endDate);
 
@@ -228,6 +290,14 @@
     const attachHtml = attUrl
       ? `<a href="${escapeAttr_(attUrl)}" target="_blank" class="text-[#2563EB] underline decoration-[#2563EB]">คลิกเพื่อดูไฟล์</a>`
       : `—`;
+
+    // requester identity
+    let fullNameNick = "-";
+    try {
+      const p = await apiGetPerson_(req.userId);
+      if (p && p.ok && p.person) fullNameNick = formatFullNameNick_(p.person.fullName, p.person.nickname);
+    } catch(e) {}
+    const lineName = String(req.name || "-");
 
     $("title").textContent = "Reject Leave ❌";
     $("subTitle").textContent = "ไม่อนุมัติคำขอ";
@@ -243,7 +313,8 @@
         <hr class="border-[#F3F4F6] mb-4" />
         <div class="space-y-3 px-1">
           ${kvRow("Req No.", `<span class="font-mono">${escapeHtml_(shortReq)}</span>`)}
-          ${kvRow("Name", escapeHtml_(req.name || "-"))}
+          ${kvRow("Line", escapeHtml_(lineName))}
+          ${kvRow("Full Name", escapeHtml_(fullNameNick))}
           ${kvRow("Type", escapeHtml_(req.leaveType || "-"))}
           ${kvRow("Date", escapeHtml_(dateText))}
           ${kvRow("Days", escapeHtml_(String(req.leaveDays ?? "-")))}
@@ -272,15 +343,12 @@
 
   // ✅ Enforce Approver (blocking) before allowing reject submit
   async function ensureApproverReady_(profileUserId) {
-    // Fast path: cache (optional)
     const cached = readRoleCache_(profileUserId);
     if (cached?.onboarded && String(cached.role || "").toLowerCase() === "approver" && isCacheFresh_(cached)) {
       setRoleBadge_("Approver");
-      // Still verify with backend later at submit-time
       return { ok:true, role:"Approver", from:"cache" };
     }
 
-    // Blocking check (for reject page)
     const r = await apiCheckUser_(profileUserId);
     if (!r || !r.ok) return { ok:false, error: String(r?.error || "check_user_failed") };
 
@@ -290,7 +358,7 @@
     }
 
     const role = String(r.role || "");
-    writeRoleCache_({ userId: profileUserId, onboarded:true, role, name: String(r.name||""), ts: Date.now() });
+    writeRoleCache_({ userId: profileUserId, onboarded:true, role, name: String(r.name||""), nickname: String(r.nickname||""), ts: Date.now() });
 
     if (role.toLowerCase() !== "approver") return { ok:false, error:"role_mismatch", role };
 
@@ -322,7 +390,6 @@
 
       const profile = await liff.getProfile();
 
-      // ✅ Approver role enforcement (blocking)
       const gate = await ensureApproverReady_(profile.userId);
       if (!gate.ok) {
         hideLoader();
@@ -334,20 +401,19 @@
           return;
         }
         if (gate.error === "role_mismatch") {
-          renderAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + (gate.role || "Requester") + " จึงไม่สามารถปฏิเสธใบลาได้");
+          renderAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + (gate.role || "Requester") + " จึงไม่มีสิทธิ์ปฏิเสธใบลา");
           return;
         }
         alert("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
         return;
       }
 
-      // ✅ Guard ซ้ำ: ดึงสถานะล่าสุดก่อน reject (กันเปิดค้างแล้วมีคนอนุมัติ/ปฏิเสธไปก่อน)
       showLoader("Checking status...");
       const latest = await getRequest_(requestId);
       const latestStatus = String(latest?.request?.status || "").toUpperCase();
       if (latestStatus !== "SUBMITTED") {
         hideLoader();
-        alert("คำขอนี้ถูกดำเนินการแล้ว จึงไม่สามารถปฏิเสธซ้ำได้ค่ะ 🙂");
+        alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
         doneAndExit();
         return;
       }
@@ -360,9 +426,7 @@
         remark
       });
 
-      if (!data || !data.ok) {
-        throw new Error(data?.error || "ระบบขัดข้อง กรุณาลองใหม่");
-      }
+      if (!data || !data.ok) throw new Error(data?.error || "ระบบขัดข้อง กรุณาลองใหม่");
 
       await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
 
@@ -407,30 +471,31 @@
       if (data && data.ok && data.request) req = data.request;
     } catch(e) {}
 
-    hideLoader();
+    if (!req) {
+      hideLoader();
+      renderNotFound_();
+      return;
+    }
 
-    if (!req) return renderNotFound_();
+    // Status guard
+    if (!guardRemarkPage_(mode, req)) { hideLoader(); return; }
 
-    // Status guard (reject requires SUBMITTED)
-    if (!guardRemarkPage_(mode, req)) return;
-
-    // For reject page, enforce onboarding+Approver role (blocking here to avoid showing form then closing)
+    // For reject page, enforce Approver role early
     if (mode === "reject") {
       try {
         const profile = await liff.getProfile();
 
-        // Fast cache check: if cache says Requester -> deny immediately
         const cached = readRoleCache_(profile.userId);
         if (cached?.onboarded && String(cached.role || "").toLowerCase() === "requester" && isCacheFresh_(cached)) {
-          renderAccessDenied_("บัญชีของคุณลงทะเบียนเป็น Requester จึงไม่สามารถปฏิเสธใบลาได้");
+          hideLoader();
+          renderAccessDenied_("บัญชีของคุณลงทะเบียนเป็น Requester จึงไม่สามารถปฏิเสธได้");
           return;
         }
 
         showLoader("Verifying...");
         const gate = await ensureApproverReady_(profile.userId);
-        hideLoader();
-
         if (!gate.ok) {
+          hideLoader();
           if (gate.error === "not_onboarded") {
             alert("กรุณา Login / Setup ก่อนใช้งานค่ะ");
             redirectToLogin_();
@@ -443,16 +508,22 @@
           renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
           return;
         }
+
+        // Preload requester person in background (best effort)
+        try { await apiGetPerson_(req.userId); } catch(e) {}
+
+        hideLoader();
+        await renderReject_(req, requestId);
+        return;
       } catch(e) {
         hideLoader();
         renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
         return;
       }
-
-      return renderReject_(req, requestId);
     }
 
-    // view_remark does not require role enforcement (optional)
+    // view_remark does not require role enforcement
+    hideLoader();
     if (mode === "view_remark") return renderViewRemark_(req, requestId);
 
     renderNotFound_();
@@ -466,4 +537,3 @@
 </script>
 </body>
 </html>
-
