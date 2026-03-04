@@ -24,6 +24,16 @@
 
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
 
+    /* ✅ compact date inputs on phones */
+    .date-input {
+      font-size: 0.85rem;
+      padding: 0.6rem;
+      border-radius: 0.75rem;
+    }
+    @media (min-width: 380px) {
+      .date-input { font-size: 0.9rem; padding: 0.7rem; }
+    }
+
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
@@ -76,11 +86,11 @@
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-1.5">
             <div class="text-[11px] uppercase tracking-wider font-bold text-[#9CA3AF]">Start Date</div>
-            <input type="date" id="startDate" class="input text-center font-bold text-[#1F2937]" onchange="validateOnFly()">
+            <input type="date" id="startDate" class="input date-input text-center font-bold text-[#1F2937]" onchange="validateOnFly()">
           </div>
           <div class="space-y-1.5">
             <div class="text-[11px] uppercase tracking-wider font-bold text-[#9CA3AF]">End Date</div>
-            <input type="date" id="endDate" class="input text-center font-bold text-[#1F2937]" onchange="validateOnFly()">
+            <input type="date" id="endDate" class="input date-input text-center font-bold text-[#1F2937]" onchange="validateOnFly()">
           </div>
         </div>
 
@@ -168,7 +178,6 @@
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
-  // ---------- localStorage cache ----------
   function writeRoleCache_(payload) {
     try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
   }
@@ -474,7 +483,6 @@
     const mode = params.get("mode");
     const requestId = params.get("requestId");
 
-    // route to remark page if needed
     if ((mode === "reject" || mode === "view_remark") && requestId) {
       const qs = new URLSearchParams({ mode, requestId }).toString();
       location.replace("remark.html?" + qs);
@@ -488,7 +496,7 @@
       $('avatarBox').classList.remove('hidden');
     }
 
-    // ✅ STRICT: block until check_user confirms onboarded & role=Requester
+    // ✅ STRICT: always check_user; if no record -> go login.html
     showLoader("Checking access...");
     let chk = null;
     try {
@@ -510,7 +518,6 @@
     }
 
     if (!chk.onboarded) {
-      // strict: always go login if not onboarded
       writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
       hideLoader();
       redirectToLogin_();
@@ -518,13 +525,7 @@
     }
 
     const role = String(chk.role || "");
-    writeRoleCache_({
-      userId: userProfile.userId,
-      onboarded: true,
-      role: role,
-      name: String(chk.name || ""),
-      ts: Date.now()
-    });
+    writeRoleCache_({ userId: userProfile.userId, onboarded:true, role, name: String(chk.name||""), ts: Date.now() });
 
     if (role.toLowerCase() !== "requester") {
       hideLoader();
@@ -564,6 +565,5 @@
 </script>
 </body>
 </html>
-
 
 
