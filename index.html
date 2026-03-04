@@ -258,6 +258,14 @@
     `;
   }
 
+  // ✅ vNext-safe: capability check (fallback to legacy `role` if needed)
+  function canRequesterFromBoot_(boot) {
+    if (!boot) return false;
+    if (typeof boot.canRequester === "boolean") return boot.canRequester;
+    const role = String(boot.role || "");
+    return role.toLowerCase() === "requester";
+  }
+
   function applyBootPayload_(boot) {
     if (!boot || !boot.ok) return;
 
@@ -490,7 +498,6 @@
         throw new Error(data?.error || "ระบบขัดข้อง");
       }
 
-      // perceived speed: render success UI first, then send message
       hideLoader();
       $('bottomBar').classList.add('hidden');
       $('formUI').innerHTML = `
@@ -501,7 +508,6 @@
         </div>
       `;
 
-      // then send message (still awaited for reliability)
       try {
         await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]);
       } catch(e) {
@@ -531,6 +537,7 @@
     const mode = params.get("mode");
     const requestId = params.get("requestId");
 
+    // redirect to remark page for reject/view_remark
     if ((mode === "reject" || mode === "view_remark") && requestId) {
       const qs = new URLSearchParams({ mode, requestId }).toString();
       location.replace(REMARK_PAGE + "?" + qs);
@@ -554,13 +561,13 @@
     // ✅ 1) apply cached boot first (perceived fast)
     const cachedBoot = readBootCache_(userProfile.userId);
     if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded) {
-      applyBootPayload_(cachedBoot);
+      // Only apply UI data (holidays/balances) if requester capable or legacy role is requester
+      if (canRequesterFromBoot_(cachedBoot)) applyBootPayload_(cachedBoot);
     }
 
     // ✅ 2) fetch bootstrap (single call)
     let boot = null;
     try {
-      // don't spam loader if cache already applied
       if (!(cachedBoot && cachedBoot.ok)) showLoader("Checking access...");
       boot = await apiBootstrap_(userProfile.userId);
     } catch (e) {
@@ -569,7 +576,6 @@
         showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
         return;
       }
-      // keep cache; still need remainingReady to be true
       if (!remainingReady) setSubmitEnabled_(false, "กำลังโหลดสิทธิ์คงเหลือ…");
       return;
     }
@@ -582,6 +588,7 @@
 
     writeBootCache_(userProfile.userId, boot);
 
+    // ✅ Gate: show login only if not onboarded
     if (!boot.onboarded) {
       writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
       hideLoader();
@@ -589,25 +596,41 @@
       return;
     }
 
-    const role = String(boot.role || "");
+    // ✅ vNext: Requester capability (fallback to legacy `role`)
+    if (!canRequesterFromBoot_(boot)) {
+      const rolesText = (Array.isArray(boot.roles) && boot.roles.length) ? boot.roles.join(", ") : String(boot.role || "Approver");
+      writeRoleCache_({
+        userId: userProfile.userId,
+        onboarded:true,
+        role: String(boot.role || ""),
+        roles: boot.roles || [],
+        canRequester: !!boot.canRequester,
+        canApprover: !!boot.canApprover,
+        name: String(boot.name||""),
+        nickname: String(boot.nickname||""),
+        ts: Date.now()
+      });
+      hideLoader();
+      showAccessDenied_("บัญชีของคุณไม่มีสิทธิ์ Requester (Role: " + rolesText + ")");
+      return;
+    }
+
+    // Save role cache (for other pages)
     writeRoleCache_({
       userId: userProfile.userId,
       onboarded:true,
-      role,
+      role: String(boot.role || "Requester"),
+      roles: boot.roles || [],
+      canRequester: (typeof boot.canRequester === "boolean") ? boot.canRequester : true,
+      canApprover: !!boot.canApprover,
       name: String(boot.name||""),
       nickname: String(boot.nickname||""),
       ts: Date.now()
     });
 
-    if (role.toLowerCase() !== "requester") {
-      hideLoader();
-      showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + role + " จึงไม่สามารถใช้งานหน้านี้ได้");
-      return;
-    }
-
     applyBootPayload_(boot);
 
-    // ✅ edit prefill (after role+remaining ready; still using compact endpoint)
+    // ✅ edit prefill (after remaining ready)
     if (isEdit) {
       try { await prefillIfEdit_(); } catch (e) { console.error("Prefill err:", e); }
     }
@@ -624,6 +647,3 @@
 </script>
 </body>
 </html>
-
-
-
