@@ -38,7 +38,7 @@
           <img id="profileImg" src="" class="w-full h-full object-cover" alt="profile">
         </div>
         <div class="flex-1">
-          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Login 🔐</h1>
+          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Welcome 👋</h1>
           <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-0.5 flex items-center gap-1">
             <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
           </p>
@@ -129,7 +129,7 @@
 
   // -------- UI helpers --------
   function setHeader_(title, subtitle) {
-    $("title").textContent = title || "Login 🔐";
+    $("title").textContent = title || "Welcome 👋";
     $("subTitle").innerHTML = subtitle || "";
   }
   function setRoleBadge_(role) {
@@ -144,7 +144,7 @@
     onboarded = false;
     existingRole = "";
 
-    setHeader_("Login 🔐", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "there")}</span>`);
+    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "there")}</span>`);
     setRoleBadge_("");
 
     $("rootBox").innerHTML = `
@@ -158,14 +158,6 @@
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
           <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น (ถ้ามี)" />
-        </div>
-
-        <!-- ✅ info box style same as index.html -->
-        <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
-          <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
-          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-            Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)
-          </div>
         </div>
       </div>
 
@@ -188,6 +180,14 @@
 
         <input type="hidden" id="roleValue" value="">
         <div id="roleErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1">กรุณาเลือก Role</div>
+
+        <!-- ✅ info box: moved UNDER Role -->
+        <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+          <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
+          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+            Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)
+          </div>
+        </div>
       </div>
     `;
 
@@ -224,8 +224,15 @@
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
           <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น (ถ้ามี)" value="${escapeHtml_(safeNick)}" />
         </div>
+      </div>
 
-        <!-- ✅ info box style same as index.html -->
+      <div class="space-y-3">
+        <div class="flex justify-between items-center px-1 h-7">
+          <label class="text-sm font-bold text-[#1F2937]">Role</label>
+          <span class="info-badge">${escapeHtml_(existingRole || "-")}</span>
+        </div>
+
+        <!-- ✅ info box: under Role -->
         <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
           <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
           <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
@@ -282,7 +289,6 @@
 
       if (!fullName) { showNameErr_(); return; }
 
-      // role locked if onboarded already
       const role = onboarded ? existingRole : ($("roleValue")?.value || "").trim();
       if (!role) { showRoleErr_(); return; }
 
@@ -355,13 +361,11 @@
 
     userProfile = await liff.getProfile();
 
-    // avatar
     if (userProfile.pictureUrl) {
       $("profileImg").src = userProfile.pictureUrl;
       $("avatarBox").classList.remove("hidden");
     }
 
-    // fast UI from cache (optional)
     const cached = readRoleCache_(userProfile.userId);
     const fresh = cacheFresh_(cached);
 
@@ -371,7 +375,6 @@
       renderFirstTime_();
     }
 
-    // verify with backend
     try {
       const res = await apiCheckUser_(userProfile.userId);
       if (!res || !res.ok) throw new Error(String(res?.error || "check_user_failed"));
@@ -401,13 +404,7 @@
 
     } catch (e) {
       hideLoader();
-
-      // if cache is fresh and onboarded, keep it
-      if (fresh && cached?.onboarded && cached?.role) {
-        console.warn("check_user failed, using cache:", e);
-        return;
-      }
-
+      if (fresh && cached?.onboarded && cached?.role) return;
       renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
       return;
     }
@@ -422,4 +419,6 @@
 
 </body>
 </html>
+
+
 
