@@ -74,6 +74,7 @@
   const BOOT_CACHE_KEY = "leave_boot_v1";
   const BOOT_TTL_MS = 3 * 60 * 1000;
 
+  // ✅ keep key แต่เรา “จะไม่ใช้ redirect-on-open” อีกแล้ว เพื่อกัน loop
   const SUCCESS_KEY = "leave_login_success_v1";
   // ======================
 
@@ -87,7 +88,6 @@
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
   function markSuccess_(){ try { sessionStorage.setItem(SUCCESS_KEY, "1"); } catch(e) {} }
-  function wasSuccess_(){ try { return sessionStorage.getItem(SUCCESS_KEY) === "1"; } catch(e) { return false; } }
   function clearSuccess_(){ try { sessionStorage.removeItem(SUCCESS_KEY); } catch(e) {} }
 
   function escapeHtml_(s) {
@@ -152,20 +152,38 @@
     location.replace(getReturnUrl_());
   }
 
-  // ✅ Requirement: login shows ONLY when not onboarded
-  function redirectIfAlreadyOnboarded_(boot) {
-    if (boot && boot.ok && boot.onboarded) {
-      goReturn_();
-      return true;
-    }
-    return false;
+  function renderSystemError_(msg) {
+    setHeader_("Something went wrong", "Please try again");
+    setRoleBadge_("");
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">⚠️</div>
+        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
+        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
+      </div>
+    `;
+    $("bottomBar").classList.add("hidden");
   }
 
-  // -------- UI screens --------
+  function renderApproverDoneAndClose_() {
+    $("bottomBar").classList.add("hidden");
+    setRoleBadge_("Role: Approver");
+    setHeader_("All set ✅", "Approver registered");
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-12 mt-6 border border-[#10B981] shadow-lg shadow-green-100">
+        <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4">✅</div>
+        <div class="text-xl font-bold text-[#1F2937]">Ready</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">กำลังปิดหน้าต่าง...</div>
+      </div>
+    `;
+    setTimeout(() => doneAndExit(), 650);
+  }
+
   function renderFirstTime_() {
     selectedRoles.clear();
     setRoleBadge_("");
-
     setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`);
 
     $("rootBox").innerHTML = `
@@ -178,7 +196,7 @@
 
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
-          <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น" />
+          <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น (ถ้ามี)" />
         </div>
       </div>
 
@@ -204,7 +222,7 @@
         <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
           <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
           <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-            Your role is set once. Contact an admin if you need to change it.
+            หน้านี้จะแสดงเฉพาะครั้งแรก (ยังไม่ลงทะเบียน) เท่านั้น
           </div>
         </div>
       </div>
@@ -215,23 +233,6 @@
     $("submitBtn").disabled = false;
   }
 
-  function renderSystemError_(msg) {
-    setHeader_("Something went wrong", "Please try again");
-    setRoleBadge_("");
-
-    $("rootBox").innerHTML = `
-      <div class="card text-center py-10">
-        <div class="text-4xl mb-3">⚠️</div>
-        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
-        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
-        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
-        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
-      </div>
-    `;
-    $("bottomBar").classList.add("hidden");
-  }
-
-  // -------- Role selector (multi) --------
   function toggleRole_(role, btn) {
     if (selectedRoles.has(role)) {
       selectedRoles.delete(role);
@@ -254,12 +255,10 @@
   }
   function showRoleErr_() { $("roleErr")?.classList.remove("hidden"); }
 
-  // -------- Submit --------
   async function handleSubmit() {
     try {
       const fullName = ($("fullName")?.value || "").trim();
       const nickname = ($("nickname")?.value || "").trim();
-
       if (!fullName) { showNameErr_(); return; }
       if (selectedRoles.size === 0) { showRoleErr_(); return; }
 
@@ -310,34 +309,27 @@
       });
 
       hideLoader();
-
       markSuccess_();
-      $("bottomBar").classList.add("hidden");
 
-      // ✅ NEW: Approver-only => close LIFF automatically
       const isApproverOnly = (data.canApprover === true && data.canRequester === false);
-
       if (isApproverOnly) {
-        $("rootBox").innerHTML = `
-          <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
-            <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
-            <div class="text-xl font-bold text-[#1F2937]">Registered Successfully</div>
-            <div class="text-sm text-[#9CA3AF] mt-2">กำลังปิดหน้าต่าง...</div>
-          </div>
-        `;
-        setTimeout(() => doneAndExit(), 700);
+        // ✅ key point: clear success key immediately to prevent loop next open
+        clearSuccess_();
+        renderApproverDoneAndClose_();
         return;
       }
 
-      // Requester (or RA) => go return (index)
+      // requester or RA => go return
+      clearSuccess_();
+      $("bottomBar").classList.add("hidden");
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
-          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
+          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Registered Successfully</div>
           <div class="text-sm text-[#9CA3AF] mt-2">กำลังไปหน้าถัดไป...</div>
         </div>
       `;
-      setTimeout(() => goReturn_(), 700);
+      setTimeout(() => goReturn_(), 650);
 
     } catch (e) {
       hideLoader();
@@ -346,34 +338,22 @@
     }
   }
 
-  // -------- Init --------
   async function init() {
+    // ✅ critical: clear success flag on entry to prevent loop in webview
+    clearSuccess_();
+
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
 
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
-    // if just registered successfully then reload => go return (safe)
-    if (wasSuccess_()) {
-      $("bottomBar").classList.add("hidden");
-      $("rootBox").innerHTML = `
-        <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
-          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4">✅</div>
-          <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">กำลังไปหน้าถัดไป...</div>
-        </div>
-      `;
-      setTimeout(() => goReturn_(), 500);
-      return;
-    }
-
     userProfile = await liff.getProfile();
-
     if (userProfile.pictureUrl) {
       $("profileImg").src = userProfile.pictureUrl;
       $("avatarBox").classList.remove("hidden");
     }
 
+    // optimistic UI
     renderFirstTime_();
     hideLoader();
 
@@ -396,9 +376,21 @@
 
     writeBootCache_(userProfile.userId, boot);
 
-    if (redirectIfAlreadyOnboarded_(boot)) return;
+    // ✅ onboarded => do not stay on login page
+    if (boot.onboarded) {
+      // Approver-only => close immediately (no redirect loop)
+      if (boot.canApprover === true && boot.canRequester === false) {
+        hideLoader();
+        renderApproverDoneAndClose_();
+        return;
+      }
+      // requester or RA => go return
+      hideLoader();
+      goReturn_();
+      return;
+    }
 
-    clearSuccess_();
+    // not onboarded => keep registration UI
     hideLoader();
   }
 
@@ -410,5 +402,3 @@
 </script>
 </body>
 </html>
-
-
