@@ -164,7 +164,15 @@
   // ======= CONFIG =======
   const LIFF_ID = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
+
+  // pages
   const LOGIN_PAGE = "login.html";
+
+  // bootstrap cache (client)
+  const BOOT_CACHE_KEY = "leave_boot_v1";
+  const BOOT_TTL_MS = 3 * 60 * 1000; // 3 min
+
+  // role cache (client)
   const ROLE_CACHE_KEY = "leave_onboard_v1";
   // ======================
 
@@ -182,8 +190,24 @@
     try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
   }
 
-  async function apiCheckUser_(userId) {
-    const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+  function readBootCache_(userId){
+    try{
+      const raw = localStorage.getItem(BOOT_CACHE_KEY);
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(!obj || obj.userId !== userId) return null;
+      if(Date.now() - (obj.ts||0) > BOOT_TTL_MS) return null;
+      return obj.payload;
+    }catch(e){ return null; }
+  }
+  function writeBootCache_(userId, payload){
+    try{
+      localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({ userId, ts: Date.now(), payload }));
+    }catch(e){}
+  }
+
+  async function apiBootstrap_(userId){
+    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
     return res.json();
   }
 
@@ -242,32 +266,9 @@
   }
 
   // --- Data Fetching ---
-  async function fetchHolidays() {
-    try {
-      const res = await fetch(API_URL + "?action=get_holidays&t=" + Date.now());
-      const data = await res.json();
-      companyHolidays = Array.isArray(data) ? data : [];
-    } catch (e) { companyHolidays = []; }
-  }
-
-  async function fetchLeaveBalance(userId) {
-    if (!userId) return;
-    try {
-      const res = await fetch(API_URL + "?action=get_balance&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.balances)) {
-        leaveBalances = {};
-        data.balances.forEach(b => {
-          if (!b || !b.type) return;
-          leaveBalances[String(b.type)] = isNaN(Number(b.remaining)) ? 0 : Number(b.remaining);
-        });
-      }
-    } catch (e) { leaveBalances = {}; }
-    updateRemainingUI();
-  }
-
   async function getRequest_(requestId) {
-    const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
+    // ✅ use compact for faster prefill
+    const res = await fetch(API_URL + "?action=get_request_compact&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
     return res.json();
   }
 
@@ -382,6 +383,7 @@
     if (!data || !data.ok || !data.request) return;
 
     const r = data.request;
+
     const st = String(r.status || "").toUpperCase();
     if (st && st !== "DRAFT") {
       alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
@@ -472,7 +474,7 @@
     }
   }
 
-  // === Init (STRICT) ===
+  // === Init ===
   async function init() {
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
@@ -496,41 +498,59 @@
       $('avatarBox').classList.remove('hidden');
     }
 
-    // ✅ STRICT: always check_user; if no record -> go login.html
-    showLoader("Checking access...");
-    let chk = null;
-    try {
-      chk = await apiCheckUser_(userProfile.userId);
-    } catch (e) {
-      hideLoader();
-      showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
-      return;
+    // ✅ Apply cached bootstrap first (perceived fast)
+    const cachedBoot = readBootCache_(userProfile.userId);
+    if (cachedBoot && cachedBoot.ok) {
+      if (Array.isArray(cachedBoot.holidays)) companyHolidays = cachedBoot.holidays;
+      leaveBalances = {};
+      (cachedBoot.balances || []).forEach(b => { if (b?.type) leaveBalances[String(b.type)] = Number(b.remaining) || 0; });
+      updateRemainingUI();
+      validateOnFly();
     }
 
-    if (!chk || !chk.ok) {
-      hideLoader();
-      if (String(chk?.error || "") === "role_conflict") {
-        showSystemError_("พบข้อมูลซ้ำซ้อนในระบบ (Requester/Approver) กรุณาติดต่อแอดมินค่ะ");
+    // ✅ Fetch bootstrap (single call)
+    let boot = null;
+    try {
+      showLoader("Checking access...");
+      boot = await apiBootstrap_(userProfile.userId);
+    } catch (e) {
+      if (!cachedBoot) {
+        hideLoader();
+        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
         return;
       }
-      showSystemError_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง");
-      return;
+      boot = null;
     }
 
-    if (!chk.onboarded) {
-      writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
-      hideLoader();
-      redirectToLogin_();
-      return;
-    }
+    if (boot && boot.ok) {
+      writeBootCache_(userProfile.userId, boot);
 
-    const role = String(chk.role || "");
-    writeRoleCache_({ userId: userProfile.userId, onboarded:true, role, name: String(chk.name||""), ts: Date.now() });
+      if (!boot.onboarded) {
+        writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
+        hideLoader();
+        redirectToLogin_();
+        return;
+      }
 
-    if (role.toLowerCase() !== "requester") {
-      hideLoader();
-      showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + role + " จึงไม่สามารถใช้งานหน้านี้ได้");
-      return;
+      const role = String(boot.role || "");
+      writeRoleCache_({
+        userId: userProfile.userId,
+        onboarded:true,
+        role,
+        name: String(boot.name||""),
+        nickname: String(boot.nickname||""),
+        ts: Date.now()
+      });
+
+      if (role.toLowerCase() !== "requester") {
+        hideLoader();
+        showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + role + " จึงไม่สามารถใช้งานหน้านี้ได้");
+        return;
+      }
+
+      companyHolidays = Array.isArray(boot.holidays) ? boot.holidays : [];
+      leaveBalances = {};
+      (boot.balances || []).forEach(b => { if (b?.type) leaveBalances[String(b.type)] = Number(b.remaining) || 0; });
     }
 
     const isEdit = (mode === "edit" && !!requestId);
@@ -544,16 +564,11 @@
       $('endDate').value = today;
     }
 
-    const pBalance = fetchLeaveBalance(userProfile.userId);
-    const pHolidays = fetchHolidays();
-
     if (isEdit) {
       try { await prefillIfEdit_(); } catch (e) { console.error("Prefill err:", e); }
     }
 
-    await Promise.allSettled([pBalance, pHolidays]);
     validateOnFly();
-
     hideLoader();
   }
 
