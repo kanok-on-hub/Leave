@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
-  <title>Login • Leave Management</title>
+  <title>Welcome • Leave Management</title>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -72,8 +72,13 @@
   const LIFF_ID  = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
 
+  // return handling
+  const DEFAULT_RETURN = "index.html";
+
+  // caches
   const ROLE_CACHE_KEY = "leave_onboard_v1";
-  const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+  const BOOT_CACHE_KEY = "leave_boot_v1";
+  const BOOT_TTL_MS = 3 * 60 * 1000; // 3 min
   // ======================
 
   const $ = (id) => document.getElementById(id);
@@ -92,27 +97,41 @@
       .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   }
 
-  // -------- Cache helpers --------
-  function readRoleCache_(userId) {
-    try {
-      const raw = localStorage.getItem(ROLE_CACHE_KEY);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      if (!obj || !obj.userId || obj.userId !== userId) return null;
-      return obj;
-    } catch(e) { return null; }
+  function setHeader_(title, subtitle) {
+    $("title").textContent = title || "Welcome 👋";
+    $("subTitle").innerHTML = subtitle || "";
   }
+  function setRoleBadge_(role) {
+    const b = $("roleBadge");
+    if (!role) { b.classList.add("hidden"); return; }
+    b.textContent = "Role: " + role;
+    b.classList.remove("hidden");
+  }
+
+  // -------- caches --------
   function writeRoleCache_(payload) {
     try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
   }
-  function cacheFresh_(obj) {
-    if (!obj || !obj.ts) return false;
-    return (Date.now() - Number(obj.ts || 0)) <= ROLE_CACHE_TTL_MS;
+
+  function readBootCache_(userId){
+    try{
+      const raw = localStorage.getItem(BOOT_CACHE_KEY);
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(!obj || obj.userId !== userId) return null;
+      if(Date.now() - (obj.ts||0) > BOOT_TTL_MS) return null;
+      return obj.payload;
+    }catch(e){ return null; }
+  }
+  function writeBootCache_(userId, payload){
+    try{
+      localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({ userId, ts: Date.now(), payload }));
+    }catch(e){}
   }
 
-  // -------- API helpers --------
-  async function apiCheckUser_(userId) {
-    const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+  // -------- API --------
+  async function apiBootstrap_(userId){
+    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
     return res.json();
   }
 
@@ -127,25 +146,25 @@
     return res.json();
   }
 
-  // -------- UI helpers --------
-  function setHeader_(title, subtitle) {
-    $("title").textContent = title || "Welcome 👋";
-    $("subTitle").innerHTML = subtitle || "";
-  }
-  function setRoleBadge_(role) {
-    const b = $("roleBadge");
-    if (!role) { b.classList.add("hidden"); return; }
-    b.textContent = "Role: " + role;
-    b.classList.remove("hidden");
+  function getReturnUrl_() {
+    const params = new URLSearchParams(location.search);
+    const ret = params.get("return");
+    return ret ? decodeURIComponent(ret) : DEFAULT_RETURN;
   }
 
-  // -------- Screens --------
+  function goReturn_() {
+    const url = getReturnUrl_();
+    // ถ้าอยากให้กลับไปหน้าเดิมใน LIFF: replace
+    location.replace(url);
+  }
+
+  // -------- UI screens --------
   function renderFirstTime_() {
     onboarded = false;
     existingRole = "";
-
-    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "there")}</span>`);
     setRoleBadge_("");
+
+    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`);
 
     $("rootBox").innerHTML = `
       <div class="card space-y-4">
@@ -181,7 +200,7 @@
         <input type="hidden" id="roleValue" value="">
         <div id="roleErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1">กรุณาเลือก Role</div>
 
-        <!-- ✅ info box: moved UNDER Role -->
+        <!-- info under role -->
         <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
           <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
           <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
@@ -200,7 +219,7 @@
     onboarded = true;
     existingRole = String(role || "").trim();
 
-    setHeader_("Account Verified ✅", `Role is locked`);
+    setHeader_("Welcome back 👋", `Role is locked`);
     setRoleBadge_(existingRole || "-");
 
     const safeName = String(name || "").trim();
@@ -232,11 +251,10 @@
           <span class="info-badge">${escapeHtml_(existingRole || "-")}</span>
         </div>
 
-        <!-- ✅ info box: under Role -->
         <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
           <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
           <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-            Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)
+            Role is set once and can’t be changed. Contact admin if needed.
           </div>
         </div>
       </div>
@@ -267,7 +285,7 @@
     document.querySelectorAll(".role-btn").forEach(b => b.classList.remove("selected"));
     btn.classList.add("selected");
     $("roleValue").value = role;
-    $("roleErr").classList.add("hidden");
+    $("roleErr")?.classList.add("hidden");
   }
 
   function clearNameErr_() {
@@ -289,6 +307,7 @@
 
       if (!fullName) { showNameErr_(); return; }
 
+      // role locked if onboarded already
       const role = onboarded ? existingRole : ($("roleValue")?.value || "").trim();
       if (!role) { showRoleErr_(); return; }
 
@@ -322,28 +341,42 @@
         return;
       }
 
-      const newRole = String(data?.role || role || "").trim();
+      const finalRole = String(data?.role || role || "").trim();
 
+      // update caches
       writeRoleCache_({
         userId: userProfile.userId,
         onboarded: true,
-        role: newRole,
+        role: finalRole,
         name: fullName,
         nickname: nickname,
         ts: Date.now()
       });
 
+      // bootstrap cache should be refreshed on next open
+      // (backend already invalidates server cache)
+      writeBootCache_(userProfile.userId, {
+        ok: true,
+        onboarded: true,
+        role: finalRole,
+        name: fullName,
+        nickname: nickname,
+        displayName: userProfile.displayName || ""
+      });
+
       hideLoader();
 
+      // ✅ after register, go back to requested page (not close)
       $("bottomBar").classList.add("hidden");
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">กำลังปิดหน้าต่าง...</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">กำลังไปต่อ...</div>
         </div>
       `;
-      setTimeout(() => doneAndExit(), 1100);
+
+      setTimeout(() => goReturn_(), 700);
 
     } catch (e) {
       hideLoader();
@@ -366,48 +399,45 @@
       $("avatarBox").classList.remove("hidden");
     }
 
-    const cached = readRoleCache_(userProfile.userId);
-    const fresh = cacheFresh_(cached);
-
-    if (cached && cached.onboarded && cached.role) {
-      renderAlreadyRegistered_(cached.role, cached.name || "", cached.nickname || "");
+    // fast UI from boot cache first
+    const cached = readBootCache_(userProfile.userId);
+    if (cached && cached.ok) {
+      if (cached.onboarded) renderAlreadyRegistered_(cached.role, cached.name, cached.nickname);
+      else renderFirstTime_();
     } else {
-      renderFirstTime_();
+      renderFirstTime_(); // default skeleton-ish
     }
 
+    // fetch bootstrap (single call)
+    let boot = null;
     try {
-      const res = await apiCheckUser_(userProfile.userId);
-      if (!res || !res.ok) throw new Error(String(res?.error || "check_user_failed"));
-
-      if (!res.onboarded) {
-        renderFirstTime_();
-        hideLoader();
-        return;
-      }
-
-      const role = String(res.role || "").trim();
-      const name = String(res.name || "").trim();
-      const nick = String(res.nickname || (cached?.nickname || "")).trim();
-
-      writeRoleCache_({
-        userId: userProfile.userId,
-        onboarded: true,
-        role: role,
-        name: name,
-        nickname: nick,
-        ts: Date.now()
-      });
-
-      renderAlreadyRegistered_(role, name, nick);
-      hideLoader();
-      return;
-
+      showLoader("Checking access...");
+      boot = await apiBootstrap_(userProfile.userId);
     } catch (e) {
       hideLoader();
-      if (fresh && cached?.onboarded && cached?.role) return;
+      if (cached && cached.ok) return; // keep cache UI
       renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
       return;
     }
+
+    if (!boot || !boot.ok) {
+      hideLoader();
+      renderSystemError_(boot?.error || "bootstrap_failed");
+      return;
+    }
+
+    writeBootCache_(userProfile.userId, boot);
+
+    if (!boot.onboarded) {
+      renderFirstTime_();
+      hideLoader();
+      return;
+    }
+
+    // onboarded
+    renderAlreadyRegistered_(boot.role, boot.name, boot.nickname);
+
+    hideLoader();
   }
 
   init().catch(err => {
