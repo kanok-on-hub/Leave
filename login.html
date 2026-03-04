@@ -12,6 +12,7 @@
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
+
     .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
     .input:focus { background:#fff; border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
@@ -22,6 +23,35 @@
     .role-btn.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563EB; font-weight:bold; }
 
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
+
+    /* Info callout (match screenshot style vibe) */
+    .info-callout {
+      background:#EFF6FF;
+      border:1px solid #DBEAFE;
+      border-radius: 0.9rem;
+      padding: 0.75rem 0.9rem;
+      display:flex;
+      gap:0.6rem;
+      align-items:flex-start;
+    }
+    .info-icon {
+      width:22px; height:22px;
+      border-radius: 6px;
+      display:flex; align-items:center; justify-content:center;
+      background:#3B82F6;
+      color:#fff;
+      font-weight:800;
+      font-size: 13px;
+      flex: 0 0 auto;
+      margin-top: 1px;
+    }
+    .info-text {
+      font-size: 12px;
+      color:#1D4ED8;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
@@ -36,7 +66,7 @@
           <img id="profileImg" src="" class="w-full h-full object-cover" alt="profile">
         </div>
         <div class="flex-1">
-          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Login / Setup 🔐</h1>
+          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">ลงทะเบียน 🔐</h1>
           <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-0.5 flex items-center gap-1">
             <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
           </p>
@@ -48,15 +78,11 @@
     <!-- Body -->
     <div class="px-5 space-y-5 flex-1" id="rootBox"></div>
 
-    <!-- Bottom Bar -->
+    <!-- Bottom Bar (no Close button) -->
     <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F3F4F6] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
       <button id="submitBtn" onclick="handleSubmit()"
         class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all">
-        Save & Continue
-      </button>
-      <button onclick="doneAndExit()"
-        class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-2xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]">
-        Close
+        ลงทะเบียน
       </button>
     </div>
 
@@ -70,7 +96,7 @@
   </div>
 
 <script>
-  // ======= CONFIG =======
+  // ======= CONFIG (ให้ใช้ค่าเดียวกับหน้าเดิม) =======
   const LIFF_ID  = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
 
@@ -111,9 +137,6 @@
 
   // -------- API helpers --------
   async function apiCheckUser_(userId) {
-    // expected:
-    // { ok:true, onboarded:false }
-    // { ok:true, onboarded:true, role:"Requester|Approver", name:"..." }
     const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
     return res.json();
   }
@@ -129,9 +152,9 @@
     return res.json();
   }
 
-  // -------- UI screens --------
+  // -------- UI helpers --------
   function setHeader_(title, subtitle) {
-    $("title").textContent = title || "Login / Setup 🔐";
+    $("title").textContent = title || "ลงทะเบียน 🔐";
     $("subTitle").innerHTML = subtitle || "";
   }
 
@@ -142,15 +165,26 @@
     b.classList.remove("hidden");
   }
 
+  // -------- UI screens --------
   function renderFirstTime_() {
-    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "there")}</span>`);
+    onboarded = false;
+    existingRole = "";
+
+    setHeader_("ลงทะเบียน 🔐", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "there")}</span>`);
     setRoleBadge_("");
 
     $("rootBox").innerHTML = `
-      <div class="card">
-        <div class="text-sm font-bold text-[#1F2937] mb-2">Full Name <span class="text-[#EF4444]">*</span></div>
-        <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" />
-        <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
+      <div class="card space-y-3">
+        <div>
+          <div class="text-sm font-bold text-[#1F2937] mb-2">Full Name <span class="text-[#EF4444]">*</span></div>
+          <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" />
+          <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
+        </div>
+
+        <div>
+          <div class="text-sm font-bold text-[#1F2937] mb-2">Nickname</div>
+          <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น (ถ้ามี)" />
+        </div>
       </div>
 
       <div class="space-y-3">
@@ -175,63 +209,58 @@
         <input type="hidden" id="roleValue" value="">
         <div id="roleErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1">กรุณาเลือก Role</div>
 
-        <div class="card bg-[#FFF7ED] border border-[#FFEDD5]">
-          <div class="text-sm font-bold text-[#C2410C] mb-2">Important</div>
-          <div class="text-[11px] text-[#EA580C] font-semibold flex items-start gap-1.5 leading-relaxed">
-            <span class="text-xs mt-0.5">⚠️</span>
-            <span>เลือก Role แล้ว “เปลี่ยนไม่ได้” กรุณาเลือกให้ถูกต้อง</span>
-          </div>
+        <!-- ✅ Info callout (instead of Important/warning card) -->
+        <div class="info-callout">
+          <div class="info-icon">i</div>
+          <div class="info-text">Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)</div>
         </div>
       </div>
     `;
 
     $("bottomBar").classList.remove("hidden");
-    $("submitBtn").textContent = "Save & Continue";
+    $("submitBtn").textContent = "ลงทะเบียน";
+    $("submitBtn").disabled = false;
   }
 
-  function renderAlreadyRegistered_(role, name) {
-    setHeader_("Account Verified ✅", `Role is locked`);
-    setRoleBadge_(role || "-");
+  function renderAlreadyRegistered_(role, name, nickname) {
+    onboarded = true;
+    existingRole = String(role || "").trim();
+
+    setHeader_("ยืนยันตัวตนแล้ว ✅", `Role ถูกล็อกแล้ว`);
+    setRoleBadge_(existingRole || "-");
 
     const safeName = (name || "").trim();
+    const safeNick = (nickname || "").trim();
 
     $("rootBox").innerHTML = `
       <div class="card text-center py-7 border border-[#10B981] shadow-lg shadow-green-100">
         <div class="w-16 h-16 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-3xl mx-auto mb-3">✅</div>
         <div class="text-lg font-bold text-[#1F2937]">Already Registered</div>
-        <div class="text-sm text-[#9CA3AF] mt-1">Role: <span class="font-bold text-[#1F2937]">${escapeHtml_(role || "-")}</span></div>
+        <div class="text-sm text-[#9CA3AF] mt-1">Role: <span class="font-bold text-[#1F2937]">${escapeHtml_(existingRole || "-")}</span></div>
       </div>
 
-      <div class="card">
-        <div class="text-sm font-bold text-[#1F2937] mb-2">Full Name <span class="text-[#EF4444]">*</span></div>
-        <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" value="${escapeHtml_(safeName)}" />
-        <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
+      <div class="card space-y-3">
+        <div>
+          <div class="text-sm font-bold text-[#1F2937] mb-2">Full Name <span class="text-[#EF4444]">*</span></div>
+          <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" value="${escapeHtml_(safeName)}" />
+          <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
+        </div>
 
-        <div class="mt-4 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
-          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-            <span class="font-bold">Role</span> เลือกแล้วเปลี่ยนไม่ได้ หากต้องการแก้ role กรุณาติดต่อแอดมิน
-          </div>
+        <div>
+          <div class="text-sm font-bold text-[#1F2937] mb-2">Nickname</div>
+          <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น (ถ้ามี)" value="${escapeHtml_(safeNick)}" />
+        </div>
+
+        <div class="info-callout">
+          <div class="info-icon">i</div>
+          <div class="info-text">Role เลือกครั้งเดียวและเปลี่ยนไม่ได้ (หากต้องการเปลี่ยน กรุณาติดต่อแอดมิน)</div>
         </div>
       </div>
     `;
 
     $("bottomBar").classList.remove("hidden");
-    $("submitBtn").textContent = "Update Name";
-  }
-
-  function renderAccessDenied_(msg) {
-    setHeader_("Access Denied 🔒", "This account cannot access this page");
-    setRoleBadge_("");
-
-    $("rootBox").innerHTML = `
-      <div class="card text-center py-10">
-        <div class="text-4xl mb-3">🔒</div>
-        <div class="text-lg font-bold text-[#1F2937]">Access Denied</div>
-        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถใช้งานหน้านี้ได้")}</div>
-        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="doneAndExit()">Close</button>
-      </div>
-    `;
-    $("bottomBar").classList.add("hidden");
+    $("submitBtn").textContent = "บันทึก";
+    $("submitBtn").disabled = false;
   }
 
   function renderSystemError_(msg) {
@@ -244,7 +273,6 @@
         <div class="text-lg font-bold text-[#1F2937]">System Error</div>
         <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
         <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
-        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
       </div>
     `;
     $("bottomBar").classList.add("hidden");
@@ -276,6 +304,7 @@
   async function handleSubmit() {
     try {
       const fullName = ($("fullName")?.value || "").trim();
+      const nickname = ($("nickname")?.value || "").trim();
 
       if (!fullName) {
         showNameErr_();
@@ -284,7 +313,6 @@
 
       // if onboarded already, role is locked (use existingRole)
       let role = onboarded ? existingRole : ($("roleValue")?.value || "").trim();
-
       if (!role) {
         showRoleErr_();
         return;
@@ -298,6 +326,7 @@
         userId: userProfile.userId,
         displayName: userProfile.displayName || "",
         fullName: fullName,
+        nickname: nickname,     // ✅ NEW (backend can ignore until you add)
         role: role
       };
 
@@ -307,7 +336,6 @@
         const err = String(data?.error || "unknown_error");
 
         if (err === "role_locked") {
-          // backend should return role (existing)
           const r = String(data?.role || existingRole || "-");
           hideLoader();
           $("submitBtn").disabled = false;
@@ -324,14 +352,14 @@
 
       // update cache immediately for speed in other pages
       const newRole = String(data?.role || role || "").trim();
-      const cachePayload = {
+      writeRoleCache_({
         userId: userProfile.userId,
         onboarded: true,
         role: newRole,
         name: fullName,
+        nickname: nickname,
         ts: Date.now()
-      };
-      writeRoleCache_(cachePayload);
+      });
 
       hideLoader();
 
@@ -341,11 +369,11 @@
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">You can close this window</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">กำลังปิดหน้าต่าง...</div>
         </div>
       `;
 
-      setTimeout(() => doneAndExit(), 1200);
+      setTimeout(() => doneAndExit(), 1100);
 
     } catch (e) {
       hideLoader();
@@ -369,62 +397,51 @@
       $("avatarBox").classList.remove("hidden");
     }
 
-    // Fast path: cache (for instant UI)
+    // fast UI from cache
     const cached = readRoleCache_(userProfile.userId);
-    const isCacheFresh = cached && (Date.now() - Number(cached.ts || 0) <= ROLE_CACHE_TTL_MS);
+    const cacheFresh = cached && (Date.now() - Number(cached.ts || 0) <= ROLE_CACHE_TTL_MS);
 
-    // If cache says onboarded, show L2 immediately (non-blocking), then verify with backend
     if (cached && cached.onboarded && cached.role) {
-      onboarded = true;
-      existingRole = String(cached.role);
-      renderAlreadyRegistered_(existingRole, cached.name || "");
+      renderAlreadyRegistered_(cached.role, cached.name || "", cached.nickname || "");
     } else {
       renderFirstTime_();
     }
 
-    // Always verify with backend (login page is not performance critical)
+    // verify with backend
     try {
       const res = await apiCheckUser_(userProfile.userId);
 
-      if (!res || !res.ok) {
-        throw new Error(String(res?.error || "check_user_failed"));
-      }
+      if (!res || !res.ok) throw new Error(String(res?.error || "check_user_failed"));
 
       if (!res.onboarded) {
-        onboarded = false;
-        existingRole = "";
         renderFirstTime_();
         hideLoader();
         return;
       }
 
-      // onboarded = true
-      onboarded = true;
-      existingRole = String(res.role || "").trim();
+      const role = String(res.role || "").trim();
       const name = String(res.name || "").trim();
+      // backend อาจยังไม่ส่ง nickname ใน check_user ได้ — fallback จาก cache/ว่าง
+      const nick = String(res.nickname || (cached?.nickname || "")).trim();
 
-      // write/refresh cache
       writeRoleCache_({
         userId: userProfile.userId,
         onboarded: true,
-        role: existingRole,
+        role: role,
         name: name,
+        nickname: nick,
         ts: Date.now()
       });
 
-      // If UI currently showing first-time, switch to already registered
-      renderAlreadyRegistered_(existingRole, name);
-
+      renderAlreadyRegistered_(role, name, nick);
       hideLoader();
       return;
 
     } catch (e) {
-      // If cache fresh and onboarded, we can allow the page to function without blocking.
-      // But since this is login page, show error to be explicit.
       hideLoader();
 
-      if (isCacheFresh && cached?.onboarded && cached?.role) {
-        // keep already registered UI, just warn silently
+      // ถ้า cache fresh และ onboarded ให้ใช้ต่อไปได้ (ไม่บังคับ)
+      if (cacheFresh && cached?.onboarded && cached?.role) {
         console.warn("check_user failed, using cache:", e);
         return;
       }
@@ -443,3 +460,5 @@
 
 </body>
 </html>
+
+
