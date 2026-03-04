@@ -523,14 +523,24 @@
     }
 
     const isEdit = (mode === "edit" && !!requestId);
+
+    // ✅ NEW: prevent double prefill
+    let didPrefill = false;
+
     const today = new Date().toISOString().split('T')[0];
     $('startDate').setAttribute("min", today);
     $('endDate').setAttribute("min", today);
     if (!isEdit) { $('startDate').value = today; $('endDate').value = today; }
 
+    // ✅ CHANGED: if edit, keep loader until prefill finishes (even when cached boot exists)
     const cachedBoot = readBootCache_(userProfile.userId);
     if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded && canRequesterFromBoot_(cachedBoot)) {
       applyBootPayload_(cachedBoot);
+
+      if (isEdit) {
+        try { await prefillIfEdit_(); didPrefill = true; } catch(e) {}
+      }
+
       hideLoader();
     }
 
@@ -587,7 +597,8 @@
 
     applyBootPayload_(boot);
 
-    if (isEdit) {
+    // ✅ CHANGED: avoid double prefill
+    if (isEdit && !didPrefill) {
       try { await prefillIfEdit_(); } catch(e) {}
     }
 
