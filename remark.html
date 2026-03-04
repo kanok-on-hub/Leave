@@ -267,8 +267,8 @@
 
       <div class="card mb-5">
         <div class="space-y-3 px-1">
-          ${kvRow("Line Name", escapeHtml_(lineName))}
-          ${kvRow("Full Name", escapeHtml_(fullNameNick))}
+          ${kvRow("Line", escapeHtml_(lineName))}
+          ${kvRow("Name", escapeHtml_(fullNameNick))}
         </div>
       </div>
 
@@ -313,8 +313,8 @@
         <hr class="border-[#F3F4F6] mb-4" />
         <div class="space-y-3 px-1">
           ${kvRow("Req No.", `<span class="font-mono">${escapeHtml_(shortReq)}</span>`)}
-          ${kvRow("Line Name", escapeHtml_(lineName))}
-          ${kvRow("Full Name", escapeHtml_(fullNameNick))}
+          ${kvRow("Line", escapeHtml_(lineName))}
+          ${kvRow("Name", escapeHtml_(fullNameNick))}
           ${kvRow("Type", escapeHtml_(req.leaveType || "-"))}
           ${kvRow("Date", escapeHtml_(dateText))}
           ${kvRow("Days", escapeHtml_(String(req.leaveDays ?? "-")))}
