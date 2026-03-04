@@ -12,14 +12,10 @@
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
-
-    /* Input style (match index.html) */
     .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
     .input:focus { background:#fff; border-color:#F87171; box-shadow:0 0 0 3px rgba(248,113,113,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
-
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
-
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
@@ -39,6 +35,7 @@
 
     <div class="px-5 pb-24" id="rootBox"></div>
 
+    <!-- Loader (used mainly for submit) -->
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
       <div class="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center max-w-[180px] w-full">
         <div class="w-10 h-10 border-4 border-[#F3F4F6] border-t-[#3B82F6] rounded-full animate-spin mb-4"></div>
@@ -52,16 +49,9 @@
   const LIFF_ID = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
   const LOGIN_PAGE = "login.html";
-  const INDEX_PAGE = "index.html";
 
-  // localStorage cache for onboarding/role
   const ROLE_CACHE_KEY = "leave_onboard_v1";
   const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-
-  // person cache
-  const PERSON_CACHE_KEY = "leave_person_v1";
-  const PERSON_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-  // ======================
 
   const $ = (id) => document.getElementById(id);
 
@@ -83,7 +73,6 @@
     b.classList.remove("hidden");
   }
 
-  // ---------- Onboarding cache ----------
   function readRoleCache_(userId) {
     try {
       const raw = localStorage.getItem(ROLE_CACHE_KEY);
@@ -101,40 +90,25 @@
     return (Date.now() - Number(obj.ts || 0)) <= ROLE_CACHE_TTL_MS;
   }
 
-  // ---------- Person cache ----------
-  function personKey_(userId){ return `${PERSON_CACHE_KEY}:${userId || ""}`; }
-  function readPersonCache_(userId){
-    try{
-      const raw = localStorage.getItem(personKey_(userId));
-      if(!raw) return null;
-      const obj = JSON.parse(raw);
-      if(!obj || !obj.ts) return null;
-      if(Date.now() - Number(obj.ts||0) > PERSON_CACHE_TTL_MS) return null;
-      return obj.data || null;
-    }catch(e){ return null; }
-  }
-  function writePersonCache_(userId, data){
-    try{
-      localStorage.setItem(personKey_(userId), JSON.stringify({ ts: Date.now(), data: data || null }));
-    }catch(e){}
+  function hasApprover_(obj) {
+    if (!obj) return false;
+    if (typeof obj.canApprover === "boolean") return obj.canApprover;
+    const role = String(obj.role || "");
+    return role.toLowerCase() === "approver";
   }
 
   async function apiCheckUser_(userId) {
-    const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+    const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId));
     return res.json();
   }
 
-  async function apiGetPerson_(userId) {
-    const cached = readPersonCache_(userId);
-    if (cached) return { ok:true, person: cached, cached:true };
-
-    const res = await fetch(API_URL + "?action=get_person&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
-    const data = await res.json();
-    if (data && data.ok && data.person) writePersonCache_(userId, data.person);
-    return data;
+  async function apiGetRequestBundle_(requestId) {
+    const res = await fetch(API_URL + "?action=get_request_bundle&requestId=" + encodeURIComponent(requestId));
+    return res.json();
   }
 
-  async function getRequest_(requestId) {
+  async function apiGetRequestFresh_(requestId) {
+    // fresh only when needed (submit safety)
     const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
     return res.json();
   }
@@ -152,15 +126,13 @@
 
   function redirectToLogin_() {
     const ret = location.pathname + location.search;
-    const url = LOGIN_PAGE + "?return=" + encodeURIComponent(ret);
-    location.replace(url);
+    location.replace(LOGIN_PAGE + "?return=" + encodeURIComponent(ret));
   }
 
   function renderAccessDenied_(msg) {
     $("title").textContent = "Access Denied 🔒";
     $("subTitle").textContent = "This page is restricted";
     setRoleBadge_("");
-
     $("rootBox").innerHTML = `
       <div class="card text-center py-10">
         <div class="text-4xl mb-3">🔒</div>
@@ -183,27 +155,12 @@
       </div>`;
   }
 
-  // ✅ GUARD: กัน reject ถ้าไม่ใช่ SUBMITTED
-  function guardRemarkPage_(mode, req) {
-    const st = String(req?.status || "").toUpperCase();
-    if (mode === "reject") {
-      if (st !== "SUBMITTED") {
-        alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
-        doneAndExit();
-        return false;
-      }
-    }
-    return true;
-  }
-
-  // Req No short
-  function shortReqId(reqId) {
+  function shortReqId_(reqId) {
     const s = String(reqId || "");
     return "#" + (s.length <= 8 ? s : s.slice(-8));
   }
 
-  // Date range short
-  function formatLeaveRangeShort(startVal, endVal) {
+  function formatLeaveRangeShort_(startVal, endVal) {
     if (!startVal || !endVal) return "-";
     const s = new Date(startVal);
     const e = new Date(endVal);
@@ -219,7 +176,6 @@
     return `${sd} ${sm} ${String(sy).slice(-2)} - ${ed} ${em} ${String(ey).slice(-2)}`;
   }
 
-  // Full Name (Nickname)
   function formatFullNameNick_(fullName, nickname){
     const fn = String(fullName || "").trim();
     const nn = String(nickname || "").trim();
@@ -228,72 +184,31 @@
     return fn || nn;
   }
 
-  // Helper rows
-  function kvRow(label, valueHtml) {
+  function kvRow_(label, valueHtml) {
     return `
       <div class="flex items-baseline space-x-3">
         <span class="text-[#9CA3AF] text-xs w-20 flex-shrink-0">${escapeHtml_(label)}</span>
         <span class="font-bold text-[#1F2937] text-sm break-words flex-1">${valueHtml}</span>
-      </div>
-    `;
+      </div>`;
   }
 
-  // ✅ Multi-role capability: Approver required
-  function hasApprover_(obj) {
-    if (!obj) return false;
-    if (typeof obj.canApprover === "boolean") return obj.canApprover;
-    const role = String(obj.role || "");
-    return role.toLowerCase() === "approver";
-  }
-
-  // ✅ Enforce Approver before allowing reject submit
-  async function ensureApproverReady_(profileUserId) {
-    const cached = readRoleCache_(profileUserId);
-    if (cached?.onboarded && hasApprover_(cached) && isCacheFresh_(cached)) {
-      setRoleBadge_("Approver");
-      return { ok:true, from:"cache" };
+  function guardRejectStatus_(req) {
+    const st = String(req?.status || "").toUpperCase();
+    if (st !== "SUBMITTED") {
+      alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
+      doneAndExit();
+      return false;
     }
-
-    const r = await apiCheckUser_(profileUserId);
-    if (!r || !r.ok) return { ok:false, error: String(r?.error || "check_user_failed") };
-
-    if (!r.onboarded) {
-      writeRoleCache_({ userId: profileUserId, onboarded:false, ts: Date.now() });
-      return { ok:false, error:"not_onboarded" };
-    }
-
-    // update cache with multi-role fields if provided
-    writeRoleCache_({
-      userId: profileUserId,
-      onboarded:true,
-      role: String(r.role || ""),
-      roles: r.roles || [],
-      canRequester: !!r.canRequester,
-      canApprover: !!r.canApprover,
-      name: String(r.name||""),
-      nickname: String(r.nickname||""),
-      ts: Date.now()
-    });
-
-    if (!hasApprover_(r)) return { ok:false, error:"role_mismatch", role: r.role, roles: r.roles || [] };
-
-    setRoleBadge_("Approver");
-    return { ok:true, from:"backend" };
+    return true;
   }
 
-  // === Mode: view remark ===
-  async function renderViewRemark_(req, requestId) {
-    const remark = (req.remark || "").toString().trim() || "-";
-    const shortReq = shortReqId(req.requestId || requestId);
-
-    // requester identity (from request.userId)
-    let fullNameNick = "-";
-    try {
-      const p = await apiGetPerson_(req.userId);
-      if (p && p.ok && p.person) fullNameNick = formatFullNameNick_(p.person.fullName, p.person.nickname);
-    } catch(e) {}
+  // --- Renderers ---
+  function renderViewRemark_(req, requesterPerson) {
+    const remark = String(req.remark || "").trim() || "-";
+    const shortReq = shortReqId_(req.requestId);
 
     const lineName = String(req.name || "-");
+    const fullNameNick = formatFullNameNick_(requesterPerson?.fullName, requesterPerson?.nickname);
 
     $("title").textContent = "Remark Details";
     $("subTitle").textContent = "เหตุผลที่ไม่อนุมัติ";
@@ -308,8 +223,8 @@
 
       <div class="card mb-5">
         <div class="space-y-3 px-1">
-          ${kvRow("Line", escapeHtml_(lineName))}
-          ${kvRow("Name", escapeHtml_(fullNameNick))}
+          ${kvRow_("Line", escapeHtml_(lineName))}
+          ${kvRow_("Name", escapeHtml_(fullNameNick))}
         </div>
       </div>
 
@@ -322,23 +237,17 @@
     `;
   }
 
-  // === Mode: reject ===
-  async function renderReject_(req, requestId) {
-    const shortReq = shortReqId(req.requestId || requestId);
-    const dateText = formatLeaveRangeShort(req.startDate, req.endDate);
+  function renderReject_(req, requesterPerson) {
+    const shortReq = shortReqId_(req.requestId);
+    const dateText = formatLeaveRangeShort_(req.startDate, req.endDate);
 
     const attUrl = req.attachmentUrl ? String(req.attachmentUrl).trim() : "";
     const attachHtml = attUrl
       ? `<a href="${escapeAttr_(attUrl)}" target="_blank" class="text-[#2563EB] underline decoration-[#2563EB]">คลิกเพื่อดูไฟล์</a>`
       : `—`;
 
-    // requester identity
-    let fullNameNick = "-";
-    try {
-      const p = await apiGetPerson_(req.userId);
-      if (p && p.ok && p.person) fullNameNick = formatFullNameNick_(p.person.fullName, p.person.nickname);
-    } catch(e) {}
     const lineName = String(req.name || "-");
+    const fullNameNick = formatFullNameNick_(requesterPerson?.fullName, requesterPerson?.nickname);
 
     $("title").textContent = "Reject Leave ❌";
     $("subTitle").textContent = "ไม่อนุมัติคำขอ";
@@ -353,14 +262,14 @@
         </div>
         <hr class="border-[#F3F4F6] mb-4" />
         <div class="space-y-3 px-1">
-          ${kvRow("Req No.", `<span class="font-mono">${escapeHtml_(shortReq)}</span>`)}
-          ${kvRow("Line", escapeHtml_(lineName))}
-          ${kvRow("Name", escapeHtml_(fullNameNick))}
-          ${kvRow("Type", escapeHtml_(req.leaveType || "-"))}
-          ${kvRow("Date", escapeHtml_(dateText))}
-          ${kvRow("Days", escapeHtml_(String(req.leaveDays ?? "-")))}
-          ${kvRow("Reason", escapeHtml_(req.reason || "-"))}
-          ${kvRow("Attach", attachHtml)}
+          ${kvRow_("Req No.", `<span class="font-mono">${escapeHtml_(shortReq)}</span>`)}
+          ${kvRow_("Line", escapeHtml_(lineName))}
+          ${kvRow_("Name", escapeHtml_(fullNameNick))}
+          ${kvRow_("Type", escapeHtml_(req.leaveType || "-"))}
+          ${kvRow_("Date", escapeHtml_(dateText))}
+          ${kvRow_("Days", escapeHtml_(String(req.leaveDays ?? "-")))}
+          ${kvRow_("Reason", escapeHtml_(req.reason || "-"))}
+          ${kvRow_("Attach", attachHtml)}
         </div>
       </div>
 
@@ -376,17 +285,46 @@
 
       <div class="space-y-3">
         <button id="submitBtn" class="w-full bg-[#F87171] hover:bg-[#EF4444] text-white py-4 rounded-2xl font-bold text-md transition-all shadow-lg shadow-red-200 active:scale-[0.98]"
-          onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">ยืนยัน</button>
+          onclick="submitReject_('${escapeAttr_(req.requestId)}')">ยืนยัน</button>
         <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-2xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]"
           onclick="doneAndExit()">ยกเลิก</button>
       </div>`;
+  }
+
+  async function ensureApproverStrict_(profileUserId) {
+    // fast path: cache
+    const cached = readRoleCache_(profileUserId);
+    if (cached?.onboarded && hasApprover_(cached) && isCacheFresh_(cached)) return { ok:true, from:"cache" };
+
+    // backend verify
+    const r = await apiCheckUser_(profileUserId);
+    if (!r || !r.ok) return { ok:false, error: String(r?.error || "check_user_failed") };
+
+    if (!r.onboarded) {
+      writeRoleCache_({ userId: profileUserId, onboarded:false, ts: Date.now() });
+      return { ok:false, error:"not_onboarded" };
+    }
+
+    writeRoleCache_({
+      userId: profileUserId,
+      onboarded:true,
+      role: String(r.role || ""),
+      roles: r.roles || [],
+      canRequester: !!r.canRequester,
+      canApprover: !!r.canApprover,
+      name: String(r.name||""),
+      nickname: String(r.nickname||""),
+      ts: Date.now()
+    });
+
+    if (!hasApprover_(r)) return { ok:false, error:"role_mismatch", roles: r.roles || [] };
+    return { ok:true, from:"backend" };
   }
 
   async function submitReject_(requestId) {
     const ta = document.getElementById("rejectRemark");
     const err = document.getElementById("remarkErr");
     const btn = document.getElementById("submitBtn");
-
     const remark = (ta?.value || "").trim();
 
     if (!remark) {
@@ -405,7 +343,7 @@
 
       const profile = await liff.getProfile();
 
-      const gate = await ensureApproverReady_(profile.userId);
+      const gate = await ensureApproverStrict_(profile.userId);
       if (!gate.ok) {
         hideLoader();
         if (btn) btn.disabled = false;
@@ -415,19 +353,15 @@
           redirectToLogin_();
           return;
         }
-        if (gate.error === "role_mismatch") {
-          const rolesText = (Array.isArray(gate.roles) && gate.roles.length) ? gate.roles.join(", ") : (gate.role || "Requester");
-          renderAccessDenied_("บัญชีของคุณไม่มีสิทธิ์ Approver (Role: " + rolesText + ")");
-          return;
-        }
-        alert("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
+        renderAccessDenied_("บัญชีของคุณไม่มีสิทธิ์ Approver");
         return;
       }
 
+      // fresh status check to prevent double action
       showLoader("Checking status...");
-      const latest = await getRequest_(requestId);
-      const latestStatus = String(latest?.request?.status || "").toUpperCase();
-      if (latestStatus !== "SUBMITTED") {
+      const latest = await apiGetRequestFresh_(requestId);
+      const st = String(latest?.request?.status || "").toUpperCase();
+      if (st !== "SUBMITTED") {
         hideLoader();
         alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
         doneAndExit();
@@ -447,15 +381,13 @@
       await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
 
       hideLoader();
-
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
         </div>
       `;
-
-      setTimeout(() => doneAndExit(), 1500);
+      setTimeout(() => doneAndExit(), 1200);
 
     } catch (e) {
       hideLoader();
@@ -465,85 +397,88 @@
   }
 
   async function init() {
-    showLoader("Loading...");
-    await liff.init({ liffId: LIFF_ID });
+    // lightweight skeleton (no overlay spam)
+    $("title").textContent = "Loading...";
+    $("subTitle").textContent = "Please wait a moment";
+    $("rootBox").innerHTML = `
+      <div class="card animate-pulse">
+        <div class="h-4 bg-slate-100 rounded w-2/3 mb-3"></div>
+        <div class="h-3 bg-slate-100 rounded w-1/2 mb-2"></div>
+        <div class="h-3 bg-slate-100 rounded w-5/6 mb-2"></div>
+        <div class="h-3 bg-slate-100 rounded w-4/6"></div>
+      </div>
+    `;
 
+    await liff.init({ liffId: LIFF_ID });
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
     const requestId = params.get("requestId");
+    if (!mode || !requestId) { renderNotFound_(); return; }
 
-    if (!mode || !requestId) {
-      hideLoader();
-      renderNotFound_();
+    // parallel: profile + request bundle
+    const pProfile = liff.getProfile();
+    const pBundle  = apiGetRequestBundle_(requestId);
+
+    const [profile, bundle] = await Promise.allSettled([pProfile, pBundle]);
+
+    const prof = (profile.status === "fulfilled") ? profile.value : null;
+    const data = (bundle.status === "fulfilled") ? bundle.value : null;
+
+    if (!data || !data.ok || !data.request) { renderNotFound_(); return; }
+
+    const req = data.request;
+    const requesterPerson = data.requesterPerson || {};
+
+    if (mode === "view_remark") {
+      renderViewRemark_(req, requesterPerson);
       return;
     }
 
-    // Fetch request
-    let req = null;
-    try {
-      const data = await getRequest_(requestId);
-      if (data && data.ok && data.request) req = data.request;
-    } catch(e) {}
-
-    if (!req) {
-      hideLoader();
-      renderNotFound_();
-      return;
-    }
-
-    // Status guard
-    if (!guardRemarkPage_(mode, req)) { hideLoader(); return; }
-
-    // Reject page requires Approver role/cap
     if (mode === "reject") {
-      try {
-        const profile = await liff.getProfile();
+      // status guard
+      if (!guardRejectStatus_(req)) return;
 
-        showLoader("Verifying...");
-        const gate = await ensureApproverReady_(profile.userId);
+      // fast role gate using cache first (if profile available)
+      if (!prof || !prof.userId) {
+        renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
+        return;
+      }
+
+      const cached = readRoleCache_(prof.userId);
+      if (cached?.onboarded && hasApprover_(cached) && isCacheFresh_(cached)) {
+        renderReject_(req, requesterPerson);
+        return;
+      }
+
+      // verify once (no overlay steps)
+      try {
+        const gate = await ensureApproverStrict_(prof.userId);
         if (!gate.ok) {
-          hideLoader();
           if (gate.error === "not_onboarded") {
             alert("กรุณา Login / Setup ก่อนใช้งานค่ะ");
             redirectToLogin_();
             return;
           }
-          if (gate.error === "role_mismatch") {
-            renderAccessDenied_("บัญชีของคุณไม่มีสิทธิ์ Approver");
-            return;
-          }
-          renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
+          renderAccessDenied_("บัญชีของคุณไม่มีสิทธิ์ Approver");
           return;
         }
-
-        // Preload requester person in background
-        try { await apiGetPerson_(req.userId); } catch(e) {}
-
-        hideLoader();
-        await renderReject_(req, requestId);
+        renderReject_(req, requesterPerson);
         return;
-      } catch(e) {
-        hideLoader();
+      } catch (e) {
         renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
         return;
       }
     }
-
-    // view_remark does not require role enforcement
-    hideLoader();
-    if (mode === "view_remark") return renderViewRemark_(req, requestId);
 
     renderNotFound_();
   }
 
   init().catch(err => {
     console.error(err);
-    hideLoader();
     renderAccessDenied_("LIFF Init Error: " + (err.message || err));
   });
 </script>
 </body>
 </html>
-
