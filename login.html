@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
+  <title>Login • Leave Management</title>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
+    .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
+    .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
+    .input:focus { background:#fff; border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+    .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
+
+    .role-btn { width:100%; text-align:left; padding:1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#6B7280; transition:.2s; position:relative; }
+    .role-btn:active { transform: scale(.98); }
+    .role-btn.selected { border-color:#3B82F6; background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:700; }
+    .role-btn.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563EB; font-weight:bold; }
+
+    .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+
+<body class="pb-24 antialiased">
+  <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
+
+    <!-- Header -->
+    <div class="bg-white px-6 pt-10 pb-6 rounded-b-3xl shadow-sm mb-6 relative z-10 border-b border-slate-100">
+      <div class="flex items-center gap-4">
+        <div id="avatarBox" class="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md ring-2 ring-blue-50 hidden">
+          <img id="profileImg" src="" class="w-full h-full object-cover" alt="profile">
+        </div>
+        <div class="flex-1">
+          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Login / Setup 🔐</h1>
+          <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-0.5 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
+          </p>
+        </div>
+        <span id="roleBadge" class="hidden info-badge">Role: -</span>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="px-5 space-y-5 flex-1" id="rootBox"></div>
+
+    <!-- Bottom Bar -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F3F4F6] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
+      <button id="submitBtn" onclick="handleSubmit()"
+        class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all">
+        Save & Continue
+      </button>
+      <button onclick="doneAndExit()"
+        class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-2xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]">
+        Close
+      </button>
+    </div>
+
+    <!-- Loader -->
+    <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
+      <div class="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center max-w-[180px] w-full">
+        <div class="w-10 h-10 border-4 border-[#F3F4F6] border-t-[#3B82F6] rounded-full animate-spin mb-4"></div>
+        <div class="font-bold text-[#1F2937] text-sm" id="loaderText">Processing...</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ======= CONFIG =======
+  const LIFF_ID  = "2008997153-n5oIYKUP";
+  const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
+
+  // localStorage cache
+  const ROLE_CACHE_KEY = "leave_onboard_v1";
+  const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+  // ===============================================
+
+  const $ = (id) => document.getElementById(id);
+
+  let userProfile = null;
+  let existingRole = "";     // "Requester" | "Approver"
+  let onboarded = false;
+
+  function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
+  function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
+  function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
+
+  function escapeHtml_(s) {
+    return String(s ?? "")
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  // -------- Cache helpers --------
+  function readRoleCache_(userId) {
+    try {
+      const raw = localStorage.getItem(ROLE_CACHE_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || !obj.userId || obj.userId !== userId) return null;
+      return obj;
+    } catch(e) { return null; }
+  }
+  function writeRoleCache_(payload) {
+    try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
+  }
+
+  // -------- API helpers --------
+  async function apiCheckUser_(userId) {
+    // expected:
+    // { ok:true, onboarded:false }
+    // { ok:true, onboarded:true, role:"Requester|Approver", name:"..." }
+    const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+    return res.json();
+  }
+
+  async function postFormUrlEncoded_(obj) {
+    const body = new URLSearchParams();
+    Object.keys(obj || {}).forEach(k => body.set(k, obj[k] == null ? "" : String(obj[k])));
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: body.toString()
+    });
+    return res.json();
+  }
+
+  // -------- UI screens --------
+  function setHeader_(title, subtitle) {
+    $("title").textContent = title || "Login / Setup 🔐";
+    $("subTitle").innerHTML = subtitle || "";
+  }
+
+  function setRoleBadge_(role) {
+    const b = $("roleBadge");
+    if (!role) { b.classList.add("hidden"); return; }
+    b.textContent = "Role: " + role;
+    b.classList.remove("hidden");
+  }
+
+  function renderFirstTime_() {
+    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "there")}</span>`);
+    setRoleBadge_("");
+
+    $("rootBox").innerHTML = `
+      <div class="card">
+        <div class="text-sm font-bold text-[#1F2937] mb-2">Full Name <span class="text-[#EF4444]">*</span></div>
+        <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" />
+        <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
+      </div>
+
+      <div class="space-y-3">
+        <div class="flex justify-between items-center px-1 h-7">
+          <label class="text-sm font-bold text-[#1F2937]">Role <span class="text-[#EF4444]">*</span></label>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3">
+          <button type="button" class="role-btn" onclick="selectRole_('Requester', this)">
+            <div class="text-2xl mb-1">📝</div>
+            <div class="text-sm font-bold">Requester</div>
+            <div class="text-[11px] mt-1 text-[#9CA3AF] font-medium">ยื่นใบลา (ใช้งานฟอร์มลา)</div>
+          </button>
+
+          <button type="button" class="role-btn" onclick="selectRole_('Approver', this)">
+            <div class="text-2xl mb-1">✅</div>
+            <div class="text-sm font-bold">Approver</div>
+            <div class="text-[11px] mt-1 text-[#9CA3AF] font-medium">ผู้อนุมัติ (กดอนุมัติ/ปฏิเสธ)</div>
+          </button>
+        </div>
+
+        <input type="hidden" id="roleValue" value="">
+        <div id="roleErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1">กรุณาเลือก Role</div>
+
+        <div class="card bg-[#FFF7ED] border border-[#FFEDD5]">
+          <div class="text-sm font-bold text-[#C2410C] mb-2">Important</div>
+          <div class="text-[11px] text-[#EA580C] font-semibold flex items-start gap-1.5 leading-relaxed">
+            <span class="text-xs mt-0.5">⚠️</span>
+            <span>เลือก Role แล้ว “เปลี่ยนไม่ได้” กรุณาเลือกให้ถูกต้อง</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    $("bottomBar").classList.remove("hidden");
+    $("submitBtn").textContent = "Save & Continue";
+  }
+
+  function renderAlreadyRegistered_(role, name) {
+    setHeader_("Account Verified ✅", `Role is locked`);
+    setRoleBadge_(role || "-");
+
+    const safeName = (name || "").trim();
+
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-7 border border-[#10B981] shadow-lg shadow-green-100">
+        <div class="w-16 h-16 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-3xl mx-auto mb-3">✅</div>
+        <div class="text-lg font-bold text-[#1F2937]">Already Registered</div>
+        <div class="text-sm text-[#9CA3AF] mt-1">Role: <span class="font-bold text-[#1F2937]">${escapeHtml_(role || "-")}</span></div>
+      </div>
+
+      <div class="card">
+        <div class="text-sm font-bold text-[#1F2937] mb-2">Full Name <span class="text-[#EF4444]">*</span></div>
+        <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" value="${escapeHtml_(safeName)}" />
+        <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
+
+        <div class="mt-4 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+            <span class="font-bold">Role</span> เลือกแล้วเปลี่ยนไม่ได้ หากต้องการแก้ role กรุณาติดต่อแอดมิน
+          </div>
+        </div>
+      </div>
+    `;
+
+    $("bottomBar").classList.remove("hidden");
+    $("submitBtn").textContent = "Update Name";
+  }
+
+  function renderAccessDenied_(msg) {
+    setHeader_("Access Denied 🔒", "This account cannot access this page");
+    setRoleBadge_("");
+
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">🔒</div>
+        <div class="text-lg font-bold text-[#1F2937]">Access Denied</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถใช้งานหน้านี้ได้")}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="doneAndExit()">Close</button>
+      </div>
+    `;
+    $("bottomBar").classList.add("hidden");
+  }
+
+  function renderSystemError_(msg) {
+    setHeader_("Something went wrong", "Please try again");
+    setRoleBadge_("");
+
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">⚠️</div>
+        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
+        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
+      </div>
+    `;
+    $("bottomBar").classList.add("hidden");
+  }
+
+  // -------- Role selector --------
+  function selectRole_(role, btn) {
+    document.querySelectorAll(".role-btn").forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    $("roleValue").value = role;
+    $("roleErr").classList.add("hidden");
+  }
+
+  function clearNameErr_() {
+    $("nameErr")?.classList.add("hidden");
+    $("fullName")?.classList.remove("err");
+  }
+  function showNameErr_() {
+    $("nameErr")?.classList.remove("hidden");
+    $("fullName")?.classList.add("err");
+    $("fullName")?.addEventListener("input", clearNameErr_, { once: true });
+  }
+
+  function showRoleErr_() {
+    $("roleErr")?.classList.remove("hidden");
+  }
+
+  // -------- Submit --------
+  async function handleSubmit() {
+    try {
+      const fullName = ($("fullName")?.value || "").trim();
+
+      if (!fullName) {
+        showNameErr_();
+        return;
+      }
+
+      // if onboarded already, role is locked (use existingRole)
+      let role = onboarded ? existingRole : ($("roleValue")?.value || "").trim();
+
+      if (!role) {
+        showRoleErr_();
+        return;
+      }
+
+      showLoader("Saving...");
+      $("submitBtn").disabled = true;
+
+      const payload = {
+        action: "register_user",
+        userId: userProfile.userId,
+        displayName: userProfile.displayName || "",
+        fullName: fullName,
+        role: role
+      };
+
+      const data = await postFormUrlEncoded_(payload);
+
+      if (!data || !data.ok) {
+        const err = String(data?.error || "unknown_error");
+
+        if (err === "role_locked") {
+          // backend should return role (existing)
+          const r = String(data?.role || existingRole || "-");
+          hideLoader();
+          $("submitBtn").disabled = false;
+          alert(`Role ถูกล็อกแล้ว\nบัญชีนี้ลงทะเบียนเป็น ${r} และไม่สามารถเปลี่ยน Role ได้\nหากต้องการเปลี่ยน Role กรุณาติดต่อแอดมิน`);
+          doneAndExit();
+          return;
+        }
+
+        hideLoader();
+        $("submitBtn").disabled = false;
+        alert("❌ Save failed: " + err);
+        return;
+      }
+
+      // update cache immediately for speed in other pages
+      const newRole = String(data?.role || role || "").trim();
+      const cachePayload = {
+        userId: userProfile.userId,
+        onboarded: true,
+        role: newRole,
+        name: fullName,
+        ts: Date.now()
+      };
+      writeRoleCache_(cachePayload);
+
+      hideLoader();
+
+      // success screen
+      $("bottomBar").classList.add("hidden");
+      $("rootBox").innerHTML = `
+        <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
+          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
+          <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">You can close this window</div>
+        </div>
+      `;
+
+      setTimeout(() => doneAndExit(), 1200);
+
+    } catch (e) {
+      hideLoader();
+      $("submitBtn").disabled = false;
+      alert("❌ Save failed: " + (e?.message || e));
+    }
+  }
+
+  // -------- Init --------
+  async function init() {
+    showLoader("Loading...");
+    await liff.init({ liffId: LIFF_ID });
+
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+
+    userProfile = await liff.getProfile();
+
+    // avatar
+    if (userProfile.pictureUrl) {
+      $("profileImg").src = userProfile.pictureUrl;
+      $("avatarBox").classList.remove("hidden");
+    }
+
+    // Fast path: cache (for instant UI)
+    const cached = readRoleCache_(userProfile.userId);
+    const isCacheFresh = cached && (Date.now() - Number(cached.ts || 0) <= ROLE_CACHE_TTL_MS);
+
+    // If cache says onboarded, show L2 immediately (non-blocking), then verify with backend
+    if (cached && cached.onboarded && cached.role) {
+      onboarded = true;
+      existingRole = String(cached.role);
+      renderAlreadyRegistered_(existingRole, cached.name || "");
+    } else {
+      renderFirstTime_();
+    }
+
+    // Always verify with backend (login page is not performance critical)
+    try {
+      const res = await apiCheckUser_(userProfile.userId);
+
+      if (!res || !res.ok) {
+        throw new Error(String(res?.error || "check_user_failed"));
+      }
+
+      if (!res.onboarded) {
+        onboarded = false;
+        existingRole = "";
+        renderFirstTime_();
+        hideLoader();
+        return;
+      }
+
+      // onboarded = true
+      onboarded = true;
+      existingRole = String(res.role || "").trim();
+      const name = String(res.name || "").trim();
+
+      // write/refresh cache
+      writeRoleCache_({
+        userId: userProfile.userId,
+        onboarded: true,
+        role: existingRole,
+        name: name,
+        ts: Date.now()
+      });
+
+      // If UI currently showing first-time, switch to already registered
+      renderAlreadyRegistered_(existingRole, name);
+
+      hideLoader();
+      return;
+
+    } catch (e) {
+      // If cache fresh and onboarded, we can allow the page to function without blocking.
+      // But since this is login page, show error to be explicit.
+      hideLoader();
+
+      if (isCacheFresh && cached?.onboarded && cached?.role) {
+        // keep already registered UI, just warn silently
+        console.warn("check_user failed, using cache:", e);
+        return;
+      }
+
+      renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+      return;
+    }
+  }
+
+  init().catch(err => {
+    console.error(err);
+    hideLoader();
+    renderSystemError_("LIFF Init Error: " + (err?.message || err));
+  });
+</script>
+
+</body>
+</html>
