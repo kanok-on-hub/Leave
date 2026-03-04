@@ -12,10 +12,14 @@
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
+
+    /* Input style (match index.html) */
     .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
     .input:focus { background:#fff; border-color:#F87171; box-shadow:0 0 0 3px rgba(248,113,113,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
+
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
+
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
@@ -35,7 +39,7 @@
 
     <div class="px-5 pb-24" id="rootBox"></div>
 
-    <!-- Loader (used mainly for submit) -->
+    <!-- Loader (match index/login) -->
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
       <div class="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center max-w-[180px] w-full">
         <div class="w-10 h-10 border-4 border-[#F3F4F6] border-t-[#3B82F6] rounded-full animate-spin mb-4"></div>
@@ -55,7 +59,7 @@
 
   const $ = (id) => document.getElementById(id);
 
-  function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
+  function showLoader(msg){ $("loaderText").textContent = msg || "Loading..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
@@ -108,7 +112,6 @@
   }
 
   async function apiGetRequestFresh_(requestId) {
-    // fresh only when needed (submit safety)
     const res = await fetch(API_URL + "?action=get_request&requestId=" + encodeURIComponent(requestId) + "&t=" + Date.now());
     return res.json();
   }
@@ -286,17 +289,13 @@
       <div class="space-y-3">
         <button id="submitBtn" class="w-full bg-[#F87171] hover:bg-[#EF4444] text-white py-4 rounded-2xl font-bold text-md transition-all shadow-lg shadow-red-200 active:scale-[0.98]"
           onclick="submitReject_('${escapeAttr_(req.requestId)}')">ยืนยัน</button>
-        <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-2xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]"
-          onclick="doneAndExit()">ยกเลิก</button>
       </div>`;
   }
 
   async function ensureApproverStrict_(profileUserId) {
-    // fast path: cache
     const cached = readRoleCache_(profileUserId);
     if (cached?.onboarded && hasApprover_(cached) && isCacheFresh_(cached)) return { ok:true, from:"cache" };
 
-    // backend verify
     const r = await apiCheckUser_(profileUserId);
     if (!r || !r.ok) return { ok:false, error: String(r?.error || "check_user_failed") };
 
@@ -357,7 +356,6 @@
         return;
       }
 
-      // fresh status check to prevent double action
       showLoader("Checking status...");
       const latest = await apiGetRequestFresh_(requestId);
       const st = String(latest?.request?.status || "").toUpperCase();
@@ -368,7 +366,7 @@
         return;
       }
 
-      showLoader("Saving...");
+      showLoader("Rejecting...");
       const data = await postFormUrlEncoded_({
         action: "reject_leave",
         requestId,
@@ -384,7 +382,7 @@
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
-          <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
+          <div class="text-xl font-bold text-[#1F2937]">Rejected</div>
         </div>
       `;
       setTimeout(() => doneAndExit(), 1200);
@@ -397,17 +395,8 @@
   }
 
   async function init() {
-    // lightweight skeleton (no overlay spam)
-    $("title").textContent = "Loading...";
-    $("subTitle").textContent = "Please wait a moment";
-    $("rootBox").innerHTML = `
-      <div class="card animate-pulse">
-        <div class="h-4 bg-slate-100 rounded w-2/3 mb-3"></div>
-        <div class="h-3 bg-slate-100 rounded w-1/2 mb-2"></div>
-        <div class="h-3 bg-slate-100 rounded w-5/6 mb-2"></div>
-        <div class="h-3 bg-slate-100 rounded w-4/6"></div>
-      </div>
-    `;
+    // ✅ Make loading experience consistent: use overlay loader like other pages
+    showLoader("Loading...");
 
     await liff.init({ liffId: LIFF_ID });
     if (!liff.isLoggedIn()) { liff.login(); return; }
@@ -415,7 +404,7 @@
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
     const requestId = params.get("requestId");
-    if (!mode || !requestId) { renderNotFound_(); return; }
+    if (!mode || !requestId) { hideLoader(); renderNotFound_(); return; }
 
     // parallel: profile + request bundle
     const pProfile = liff.getProfile();
@@ -426,36 +415,37 @@
     const prof = (profile.status === "fulfilled") ? profile.value : null;
     const data = (bundle.status === "fulfilled") ? bundle.value : null;
 
-    if (!data || !data.ok || !data.request) { renderNotFound_(); return; }
+    if (!data || !data.ok || !data.request) { hideLoader(); renderNotFound_(); return; }
 
     const req = data.request;
     const requesterPerson = data.requesterPerson || {};
 
     if (mode === "view_remark") {
+      hideLoader();
       renderViewRemark_(req, requesterPerson);
       return;
     }
 
     if (mode === "reject") {
-      // status guard
-      if (!guardRejectStatus_(req)) return;
+      if (!guardRejectStatus_(req)) { hideLoader(); return; }
 
-      // fast role gate using cache first (if profile available)
       if (!prof || !prof.userId) {
+        hideLoader();
         renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
         return;
       }
 
       const cached = readRoleCache_(prof.userId);
       if (cached?.onboarded && hasApprover_(cached) && isCacheFresh_(cached)) {
+        hideLoader();
         renderReject_(req, requesterPerson);
         return;
       }
 
-      // verify once (no overlay steps)
       try {
         const gate = await ensureApproverStrict_(prof.userId);
         if (!gate.ok) {
+          hideLoader();
           if (gate.error === "not_onboarded") {
             alert("กรุณา Login / Setup ก่อนใช้งานค่ะ");
             redirectToLogin_();
@@ -464,21 +454,26 @@
           renderAccessDenied_("บัญชีของคุณไม่มีสิทธิ์ Approver");
           return;
         }
+        hideLoader();
         renderReject_(req, requesterPerson);
         return;
       } catch (e) {
+        hideLoader();
         renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
         return;
       }
     }
 
+    hideLoader();
     renderNotFound_();
   }
 
   init().catch(err => {
     console.error(err);
+    hideLoader();
     renderAccessDenied_("LIFF Init Error: " + (err.message || err));
   });
 </script>
 </body>
 </html>
+
