@@ -12,23 +12,27 @@
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
-    
+
     /* นำสไตล์ Input จากหน้า Index มาใช้คุมโทน */
     .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
     .input:focus { background:#fff; border-color:#F87171; box-shadow:0 0 0 3px rgba(248,113,113,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
-    
+
+    .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
 
 <body class="pb-20 antialiased">
   <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
-    
+
     <div class="bg-white px-6 pt-10 pb-6 rounded-b-3xl shadow-sm mb-6 relative z-10 border-b border-slate-100 text-center">
       <div>
         <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Loading...</h1>
         <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-1">Please wait a moment</p>
+      </div>
+      <div class="mt-3 flex justify-center">
+        <span id="roleBadge" class="hidden info-badge">Role: -</span>
       </div>
     </div>
 
@@ -46,6 +50,11 @@
   // ======= CONFIG =======
   const LIFF_ID = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
+  const LOGIN_PAGE = "login.html";
+
+  // localStorage cache for onboarding/role
+  const ROLE_CACHE_KEY = "leave_onboard_v1";
+  const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
   // ======================
 
   const $ = (id) => document.getElementById(id);
@@ -59,11 +68,73 @@
   }
   function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
 
+  function setRoleBadge_(role) {
+    const b = $("roleBadge");
+    if (!role) { b.classList.add("hidden"); return; }
+    b.textContent = "Role: " + role;
+    b.classList.remove("hidden");
+  }
+
+  // ---------- Onboarding cache ----------
+  function readRoleCache_(userId) {
+    try {
+      const raw = localStorage.getItem(ROLE_CACHE_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || obj.userId !== userId) return null;
+      return obj;
+    } catch(e) { return null; }
+  }
+  function writeRoleCache_(payload) {
+    try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
+  }
+  function isCacheFresh_(obj) {
+    if (!obj || !obj.ts) return false;
+    return (Date.now() - Number(obj.ts || 0)) <= ROLE_CACHE_TTL_MS;
+  }
+
+  async function apiCheckUser_(userId) {
+    const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+    return res.json();
+  }
+
+  function redirectToLogin_() {
+    const ret = location.pathname + location.search;
+    const url = LOGIN_PAGE + "?return=" + encodeURIComponent(ret);
+    location.replace(url);
+  }
+
+  function renderAccessDenied_(msg) {
+    $("title").textContent = "Access Denied 🔒";
+    $("subTitle").textContent = "This page is restricted";
+    setRoleBadge_("");
+
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">🔒</div>
+        <div class="text-lg font-bold text-[#1F2937]">Access Denied</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถใช้งานหน้านี้ได้")}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="doneAndExit()">Close</button>
+      </div>`;
+  }
+
+  function renderNotFound_() {
+    $("title").textContent = "Not Found";
+    $("subTitle").textContent = "Error";
+    setRoleBadge_("");
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">📄❓</div>
+        <div class="text-lg font-bold text-[#1F2937]">หาใบลาไม่เจอค่ะ</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">โปรดตรวจสอบลิงก์อีกครั้ง</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="doneAndExit()">ปิดหน้าต่าง</button>
+      </div>`;
+  }
+
   // ✅ GUARD: กัน reject ถ้าไม่ใช่ SUBMITTED (กันทั้งเปิดหน้าและกดซ้ำ)
   function guardRemarkPage_(mode, req) {
     const st = String(req?.status || "").toUpperCase();
 
-    // Reject mode: ทำได้เฉพาะ SUBMITTED
     if (mode === "reject") {
       if (st !== "SUBMITTED") {
         alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
@@ -91,15 +162,9 @@
     const sd = s.getDate(), sm = months[s.getMonth()], sy = s.getFullYear();
     const ed = e.getDate(), em = months[e.getMonth()], ey = e.getFullYear();
 
-    if (s.getTime() === e.getTime() || (sd === ed && sm === em && sy === ey)) {
-      return `${sd} ${sm} ${sy}`;
-    }
-    if (sm === em && sy === ey) {
-      return `${sd}-${ed} ${sm} ${sy}`;
-    }
-    if (sy === ey) {
-      return `${sd} ${sm} - ${ed} ${em} ${sy}`;
-    }
+    if (s.getTime() === e.getTime() || (sd === ed && sm === em && sy === ey)) return `${sd} ${sm} ${sy}`;
+    if (sm === em && sy === ey) return `${sd}-${ed} ${sm} ${sy}`;
+    if (sy === ey) return `${sd} ${sm} - ${ed} ${em} ${sy}`;
     return `${sd} ${sm} ${String(sy).slice(-2)} - ${ed} ${em} ${String(ey).slice(-2)}`;
   }
 
@@ -107,7 +172,7 @@
   function kvRow(label, valueHtml) {
     return `
       <div class="flex items-baseline space-x-3">
-        <span class="text-[#9CA3AF] text-xs w-20 flex-shrink-0">${label}</span>
+        <span class="text-[#9CA3AF] text-xs w-20 flex-shrink-0">${escapeHtml_(label)}</span>
         <span class="font-bold text-[#1F2937] text-sm break-words flex-1">${valueHtml}</span>
       </div>
     `;
@@ -129,18 +194,6 @@
     return res.json();
   }
 
-  function renderNotFound_() {
-    $("title").textContent = "Not Found";
-    $("subTitle").textContent = "Error";
-    $("rootBox").innerHTML = `
-      <div class="card text-center py-10">
-        <div class="text-4xl mb-3">📄❓</div>
-        <div class="text-lg font-bold text-[#1F2937]">หาใบลาไม่เจอค่ะ</div>
-        <div class="text-sm text-[#9CA3AF] mt-2">โปรดตรวจสอบลิงก์อีกครั้ง</div>
-        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="doneAndExit()">ปิดหน้าต่าง</button>
-      </div>`;
-  }
-
   // === โหมด 1: พนักงานดูเหตุผลที่โดนปฏิเสธ ===
   function renderViewRemark_(req, requestId) {
     const remark = (req.remark || "").toString().trim() || "-";
@@ -148,6 +201,7 @@
 
     $("title").textContent = "Remark Details";
     $("subTitle").textContent = "เหตุผลที่ไม่อนุมัติ";
+    setRoleBadge_("");
 
     $("rootBox").innerHTML = `
       <div class="card mb-5 text-center pt-6 pb-5">
@@ -169,15 +223,15 @@
   function renderReject_(req, requestId) {
     const shortReq = shortReqId(req.requestId || requestId);
     const dateText = formatLeaveRangeShort(req.startDate, req.endDate);
-    
-    // จัดการลิงก์ไฟล์แนบ
+
     const attUrl = req.attachmentUrl ? String(req.attachmentUrl).trim() : "";
-    const attachHtml = attUrl 
+    const attachHtml = attUrl
       ? `<a href="${escapeAttr_(attUrl)}" target="_blank" class="text-[#2563EB] underline decoration-[#2563EB]">คลิกเพื่อดูไฟล์</a>`
       : `—`;
 
     $("title").textContent = "Reject Leave ❌";
     $("subTitle").textContent = "ไม่อนุมัติคำขอ";
+    setRoleBadge_("Approver");
 
     $("rootBox").innerHTML = `
       <div class="card mb-5">
@@ -201,7 +255,7 @@
       <div class="space-y-2 mb-6 ml-1">
         <label class="block text-sm font-bold text-[#1F2937]">เหตุผลที่ไม่อนุมัติ <span class="text-[#EF4444]">*</span></label>
         <textarea id="rejectRemark" rows="3" class="input resize-none" placeholder="ระบุเหตุผลให้พนักงานทราบ"></textarea>
-        
+
         <div id="remarkErr" class="hidden text-xs text-[#EF4444] mt-1.5 flex items-center font-bold">
           <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
           กรุณากรอกเหตุผลก่อนกดยืนยัน
@@ -211,9 +265,37 @@
       <div class="space-y-3">
         <button id="submitBtn" class="w-full bg-[#F87171] hover:bg-[#EF4444] text-white py-4 rounded-2xl font-bold text-md transition-all shadow-lg shadow-red-200 active:scale-[0.98]"
           onclick="submitReject_('${escapeAttr_(req.requestId || requestId)}')">ยืนยัน</button>
-        <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-2xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" 
+        <button class="w-full bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3.5 rounded-2xl font-bold text-md hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]"
           onclick="doneAndExit()">ยกเลิก</button>
       </div>`;
+  }
+
+  // ✅ Enforce Approver (blocking) before allowing reject submit
+  async function ensureApproverReady_(profileUserId) {
+    // Fast path: cache (optional)
+    const cached = readRoleCache_(profileUserId);
+    if (cached?.onboarded && String(cached.role || "").toLowerCase() === "approver" && isCacheFresh_(cached)) {
+      setRoleBadge_("Approver");
+      // Still verify with backend later at submit-time
+      return { ok:true, role:"Approver", from:"cache" };
+    }
+
+    // Blocking check (for reject page)
+    const r = await apiCheckUser_(profileUserId);
+    if (!r || !r.ok) return { ok:false, error: String(r?.error || "check_user_failed") };
+
+    if (!r.onboarded) {
+      writeRoleCache_({ userId: profileUserId, onboarded:false, ts: Date.now() });
+      return { ok:false, error:"not_onboarded" };
+    }
+
+    const role = String(r.role || "");
+    writeRoleCache_({ userId: profileUserId, onboarded:true, role, name: String(r.name||""), ts: Date.now() });
+
+    if (role.toLowerCase() !== "approver") return { ok:false, error:"role_mismatch", role };
+
+    setRoleBadge_("Approver");
+    return { ok:true, role:"Approver", from:"backend" };
   }
 
   async function submitReject_(requestId) {
@@ -222,11 +304,11 @@
     const btn = document.getElementById("submitBtn");
 
     const remark = (ta?.value || "").trim();
-    
+
     if (!remark) {
       err?.classList.remove("hidden");
       ta?.classList.add("err");
-      
+
       ta.addEventListener('input', function() {
         err?.classList.add("hidden");
         ta?.classList.remove("err");
@@ -235,12 +317,32 @@
     }
 
     try {
-      showLoader("Saving...");
-      if(btn) btn.disabled = true;
+      showLoader("Verifying...");
+      if (btn) btn.disabled = true;
 
       const profile = await liff.getProfile();
 
-      // ✅ GUARD ซ้ำ: ดึงสถานะล่าสุดก่อน reject (กันเปิดค้างแล้วมีคนอนุมัติ/ปฏิเสธไปก่อน)
+      // ✅ Approver role enforcement (blocking)
+      const gate = await ensureApproverReady_(profile.userId);
+      if (!gate.ok) {
+        hideLoader();
+        if (btn) btn.disabled = false;
+
+        if (gate.error === "not_onboarded") {
+          alert("กรุณา Login / Setup ก่อนใช้งานค่ะ");
+          redirectToLogin_();
+          return;
+        }
+        if (gate.error === "role_mismatch") {
+          renderAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + (gate.role || "Requester") + " จึงไม่สามารถปฏิเสธใบลาได้");
+          return;
+        }
+        alert("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
+        return;
+      }
+
+      // ✅ Guard ซ้ำ: ดึงสถานะล่าสุดก่อน reject (กันเปิดค้างแล้วมีคนอนุมัติ/ปฏิเสธไปก่อน)
+      showLoader("Checking status...");
       const latest = await getRequest_(requestId);
       const latestStatus = String(latest?.request?.status || "").toUpperCase();
       if (latestStatus !== "SUBMITTED") {
@@ -250,6 +352,7 @@
         return;
       }
 
+      showLoader("Saving...");
       const data = await postFormUrlEncoded_({
         action: "reject_leave",
         requestId,
@@ -262,21 +365,21 @@
       }
 
       await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
-      
+
       hideLoader();
-      
+
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
         </div>
       `;
-      
+
       setTimeout(() => doneAndExit(), 1500);
 
     } catch (e) {
       hideLoader();
-      if(btn) btn.disabled = false;
+      if (btn) btn.disabled = false;
       alert("❌ ไม่สามารถทำรายการได้: " + (e?.message || e));
     }
   }
@@ -284,7 +387,7 @@
   async function init() {
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
-    
+
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
     const params = new URLSearchParams(location.search);
@@ -297,6 +400,7 @@
       return;
     }
 
+    // Fetch request
     let req = null;
     try {
       const data = await getRequest_(requestId);
@@ -307,11 +411,49 @@
 
     if (!req) return renderNotFound_();
 
-    // ✅ GUARD: บล็อก reject ถ้าสถานะไม่ใช่ SUBMITTED
+    // Status guard (reject requires SUBMITTED)
     if (!guardRemarkPage_(mode, req)) return;
 
+    // For reject page, enforce onboarding+Approver role (blocking here to avoid showing form then closing)
+    if (mode === "reject") {
+      try {
+        const profile = await liff.getProfile();
+
+        // Fast cache check: if cache says Requester -> deny immediately
+        const cached = readRoleCache_(profile.userId);
+        if (cached?.onboarded && String(cached.role || "").toLowerCase() === "requester" && isCacheFresh_(cached)) {
+          renderAccessDenied_("บัญชีของคุณลงทะเบียนเป็น Requester จึงไม่สามารถปฏิเสธใบลาได้");
+          return;
+        }
+
+        showLoader("Verifying...");
+        const gate = await ensureApproverReady_(profile.userId);
+        hideLoader();
+
+        if (!gate.ok) {
+          if (gate.error === "not_onboarded") {
+            alert("กรุณา Login / Setup ก่อนใช้งานค่ะ");
+            redirectToLogin_();
+            return;
+          }
+          if (gate.error === "role_mismatch") {
+            renderAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + (gate.role || "Requester") + " จึงไม่สามารถปฏิเสธใบลาได้");
+            return;
+          }
+          renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
+          return;
+        }
+      } catch(e) {
+        hideLoader();
+        renderAccessDenied_("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
+        return;
+      }
+
+      return renderReject_(req, requestId);
+    }
+
+    // view_remark does not require role enforcement (optional)
     if (mode === "view_remark") return renderViewRemark_(req, requestId);
-    if (mode === "reject") return renderReject_(req, requestId);
 
     renderNotFound_();
   }
@@ -319,11 +461,9 @@
   init().catch(err => {
     console.error(err);
     hideLoader();
-    alert("LIFF Init Error: " + (err.message || err));
+    renderAccessDenied_("LIFF Init Error: " + (err.message || err));
   });
 </script>
 </body>
 </html>
-
-
 
