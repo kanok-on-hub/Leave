@@ -17,6 +17,7 @@
     .input:focus { background:#fff; border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
 
+    /* keep original style, but allow multi-select */
     .role-btn { width:100%; text-align:left; padding:1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#6B7280; transition:.2s; position:relative; }
     .role-btn:active { transform: scale(.98); }
     .role-btn.selected { border-color:#3B82F6; background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:600; }
@@ -75,37 +76,30 @@
   // return handling
   const DEFAULT_RETURN = "index.html";
 
-  // caches
+  // caches (same keys as before)
   const ROLE_CACHE_KEY = "leave_onboard_v1";
   const BOOT_CACHE_KEY = "leave_boot_v1";
   const BOOT_TTL_MS = 3 * 60 * 1000; // 3 min
 
-  // ✅ success guard (กัน reload แล้วกลับไปโหลด)
+  // ✅ success guard
   const SUCCESS_KEY = "leave_login_success_v1";
   // ======================
 
   const $ = (id) => document.getElementById(id);
 
   let userProfile = null;
-  let onboarded = false;
-  let existingRole = ""; // Requester|Approver
+
+  // selected roles (multi)
+  const selectedRoles = new Set(); // "Requester" | "Approver"
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
 
-  function doneAndExit(){
-    try { liff.closeWindow(); } catch(e) {}
-  }
+  function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
-  function markSuccess_(){
-    try { sessionStorage.setItem(SUCCESS_KEY, "1"); } catch(e) {}
-  }
-  function wasSuccess_(){
-    try { return sessionStorage.getItem(SUCCESS_KEY) === "1"; } catch(e) { return false; }
-  }
-  function clearSuccess_(){
-    try { sessionStorage.removeItem(SUCCESS_KEY); } catch(e) {}
-  }
+  function markSuccess_(){ try { sessionStorage.setItem(SUCCESS_KEY, "1"); } catch(e) {} }
+  function wasSuccess_(){ try { return sessionStorage.getItem(SUCCESS_KEY) === "1"; } catch(e) { return false; } }
+  function clearSuccess_(){ try { sessionStorage.removeItem(SUCCESS_KEY); } catch(e) {} }
 
   function escapeHtml_(s) {
     return String(s ?? "")
@@ -117,14 +111,13 @@
     $("title").textContent = title || "Welcome 👋";
     $("subTitle").innerHTML = subtitle || "";
   }
-  function setRoleBadge_(role) {
+  function setRoleBadge_(roleText) {
     const b = $("roleBadge");
-    if (!role) { b.classList.add("hidden"); return; }
-    b.textContent = "Role: " + role;
+    if (!roleText) { b.classList.add("hidden"); return; }
+    b.textContent = roleText;
     b.classList.remove("hidden");
   }
 
-  // -------- caches --------
   function writeRoleCache_(payload) {
     try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
   }
@@ -145,7 +138,6 @@
     }catch(e){}
   }
 
-  // -------- API --------
   async function apiBootstrap_(userId){
     const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
     return res.json();
@@ -167,16 +159,24 @@
     const ret = params.get("return");
     return ret ? decodeURIComponent(ret) : DEFAULT_RETURN;
   }
-
   function goReturn_() {
     const url = getReturnUrl_();
     location.replace(url);
   }
 
+  // ✅ Requirement: login shows ONLY when not onboarded
+  function redirectIfAlreadyOnboarded_(boot) {
+    if (boot && boot.ok && boot.onboarded) {
+      // Already registered -> go back immediately (do NOT show this page)
+      goReturn_();
+      return true;
+    }
+    return false;
+  }
+
   // -------- UI screens --------
   function renderFirstTime_() {
-    onboarded = false;
-    existingRole = "";
+    selectedRoles.clear();
     setRoleBadge_("");
 
     setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`);
@@ -201,24 +201,23 @@
         </div>
 
         <div class="grid grid-cols-1 gap-3">
-          <button type="button" class="role-btn" onclick="selectRole_('Requester', this)">
+          <button type="button" class="role-btn" onclick="toggleRole_('Requester', this)">
             <div class="text-2xl mb-1">📝</div>
             <span class="text-sm font-medium">Requester</span>
           </button>
 
-          <button type="button" class="role-btn" onclick="selectRole_('Approver', this)">
+          <button type="button" class="role-btn" onclick="toggleRole_('Approver', this)">
             <div class="text-2xl mb-1">✅</div>
             <span class="text-sm font-medium">Approver</span>
           </button>
         </div>
 
-        <input type="hidden" id="roleValue" value="">
-        <div id="roleErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1">กรุณาเลือก Role</div>
+        <div id="roleErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1">กรุณาเลือกอย่างน้อย 1 Role</div>
 
         <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
           <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
           <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-            Role is set once and can’t be changed. Contact admin if needed.
+            Login หน้านี้ใช้เฉพาะครั้งแรกเท่านั้น (ยังไม่ลงทะเบียนในระบบ)
           </div>
         </div>
       </div>
@@ -226,56 +225,6 @@
 
     $("bottomBar").classList.remove("hidden");
     $("submitBtn").textContent = "ลงทะเบียน";
-    $("submitBtn").disabled = false;
-  }
-
-  function renderAlreadyRegistered_(role, name, nickname) {
-    onboarded = true;
-    existingRole = String(role || "").trim();
-
-    setHeader_("Welcome back 👋", `Role is locked`);
-    setRoleBadge_(existingRole || "-");
-
-    const safeName = String(name || "").trim();
-    const safeNick = String(nickname || "").trim();
-
-    $("rootBox").innerHTML = `
-      <div class="card text-center py-7 border border-[#10B981] shadow-lg shadow-green-100">
-        <div class="w-16 h-16 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-3xl mx-auto mb-3">✅</div>
-        <div class="text-lg font-bold text-[#1F2937]">Already Registered</div>
-        <div class="text-sm text-[#9CA3AF] mt-1">Role: <span class="font-bold text-[#1F2937]">${escapeHtml_(existingRole || "-")}</span></div>
-      </div>
-
-      <div class="card space-y-4">
-        <div>
-          <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
-          <input id="fullName" type="text" class="input" placeholder="ชื่อ - นามสกุล" value="${escapeHtml_(safeName)}" />
-          <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
-        </div>
-
-        <div>
-          <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
-          <input id="nickname" type="text" class="input" placeholder="ชื่อเล่น (ถ้ามี)" value="${escapeHtml_(safeNick)}" />
-        </div>
-      </div>
-
-      <div class="space-y-3">
-        <div class="flex justify-between items-center px-1 h-7">
-          <label class="text-sm font-bold text-[#1F2937]">Role</label>
-          <span class="info-badge">${escapeHtml_(existingRole || "-")}</span>
-        </div>
-
-        <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
-          <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
-          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-            Role is set once and can’t be changed. Contact admin if needed.
-          </div>
-        </div>
-      </div>
-    `;
-
-    $("bottomBar").classList.remove("hidden");
-    $("submitBtn").textContent = "บันทึก";
     $("submitBtn").disabled = false;
   }
 
@@ -289,16 +238,21 @@
         <div class="text-lg font-bold text-[#1F2937]">System Error</div>
         <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
         <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
+        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
       </div>
     `;
     $("bottomBar").classList.add("hidden");
   }
 
-  // -------- Role selector --------
-  function selectRole_(role, btn) {
-    document.querySelectorAll(".role-btn").forEach(b => b.classList.remove("selected"));
-    btn.classList.add("selected");
-    $("roleValue").value = role;
+  // -------- Role selector (multi) --------
+  function toggleRole_(role, btn) {
+    if (selectedRoles.has(role)) {
+      selectedRoles.delete(role);
+      btn.classList.remove("selected");
+    } else {
+      selectedRoles.add(role);
+      btn.classList.add("selected");
+    }
     $("roleErr")?.classList.add("hidden");
   }
 
@@ -320,9 +274,10 @@
       const nickname = ($("nickname")?.value || "").trim();
 
       if (!fullName) { showNameErr_(); return; }
+      if (selectedRoles.size === 0) { showRoleErr_(); return; }
 
-      const role = onboarded ? existingRole : ($("roleValue")?.value || "").trim();
-      if (!role) { showRoleErr_(); return; }
+      // send roles CSV for vNext backend
+      const rolesCsv = Array.from(selectedRoles).join(",");
 
       showLoader("Saving...");
       $("submitBtn").disabled = true;
@@ -333,44 +288,37 @@
         displayName: userProfile.displayName || "",
         fullName: fullName,
         nickname: nickname,
-        role: role
+        roles: rolesCsv
       });
 
       if (!data || !data.ok) {
-        const err = String(data?.error || "unknown_error");
-
-        if (err === "role_locked") {
-          const r = String(data?.role || existingRole || "-");
-          hideLoader();
-          $("submitBtn").disabled = false;
-          alert(`Role ถูกล็อกแล้ว\nบัญชีนี้ลงทะเบียนเป็น ${r} และไม่สามารถเปลี่ยน Role ได้\nหากต้องการเปลี่ยน Role กรุณาติดต่อแอดมิน`);
-          // role locked => ปิดได้เลย
-          doneAndExit();
-          return;
-        }
-
         hideLoader();
         $("submitBtn").disabled = false;
-        alert("❌ Save failed: " + err);
+        alert("❌ Save failed: " + String(data?.error || "unknown_error"));
         return;
       }
 
-      const finalRole = String(data?.role || role || "").trim();
-
-      // update caches
+      // update caches (keep consistent keys for other pages)
       writeRoleCache_({
         userId: userProfile.userId,
         onboarded: true,
-        role: finalRole,
+        role: String(data.role || "Requester"),
+        roles: data.roles || [],
+        canRequester: !!data.canRequester,
+        canApprover: !!data.canApprover,
         name: fullName,
         nickname: nickname,
         ts: Date.now()
       });
 
+      // minimal boot cache for snappy index
       writeBootCache_(userProfile.userId, {
         ok: true,
         onboarded: true,
-        role: finalRole,
+        role: String(data.role || "Requester"),
+        roles: data.roles || [],
+        canRequester: !!data.canRequester,
+        canApprover: !!data.canApprover,
         name: fullName,
         nickname: nickname,
         displayName: userProfile.displayName || ""
@@ -378,30 +326,14 @@
 
       hideLoader();
 
-      // ✅ success guard กัน reload แล้ววนกลับโหลด
       markSuccess_();
-
       $("bottomBar").classList.add("hidden");
 
-      // ✅ APPROVER: ควรปิดเลย (ไม่ต้องกลับ index)
-      if (finalRole.toLowerCase() === "approver") {
-        $("rootBox").innerHTML = `
-          <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
-            <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
-            <div class="text-xl font-bold text-[#1F2937]">Registered Successfully</div>
-            <div class="text-sm text-[#9CA3AF] mt-2">กำลังปิดหน้าต่าง...</div>
-          </div>
-        `;
-        setTimeout(() => doneAndExit(), 700);
-        return;
-      }
-
-      // ✅ REQUESTER: กลับหน้า return เพื่อทำใบลา
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Registered Successfully</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">กำลังไปหน้าสร้างใบลา...</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">กำลังไปหน้าถัดไป...</div>
         </div>
       `;
 
@@ -421,17 +353,17 @@
 
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
-    // ✅ ถ้าเพิ่ง register สำเร็จแล้วเกิด reload ขึ้นมาอีก: ปิดทันที
+    // ✅ If just registered successfully then reload => go return immediately
     if (wasSuccess_()) {
       $("bottomBar").classList.add("hidden");
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Saved Successfully</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">กำลังปิดหน้าต่าง...</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">กำลังไปหน้าถัดไป...</div>
         </div>
       `;
-      setTimeout(() => doneAndExit(), 500);
+      setTimeout(() => goReturn_(), 500);
       return;
     }
 
@@ -442,25 +374,17 @@
       $("avatarBox").classList.remove("hidden");
     }
 
-    // 1) fast UI from boot cache first
-    const cached = readBootCache_(userProfile.userId);
-    if (cached && cached.ok) {
-      if (cached.onboarded) renderAlreadyRegistered_(cached.role, cached.name, cached.nickname);
-      else renderFirstTime_();
-      // ลดความรู้สึก “ค้าง”: ไม่ต้อง showLoader ซ้ำถ้ามี cache
-      hideLoader();
-    } else {
-      renderFirstTime_();
-    }
+    // optimistic UI
+    renderFirstTime_();
+    hideLoader();
 
-    // 2) fetch bootstrap (single call)
+    // ✅ Fetch bootstrap to enforce "login only when not onboarded"
     let boot = null;
     try {
-      if (!(cached && cached.ok)) showLoader("Checking access...");
+      showLoader("Checking access...");
       boot = await apiBootstrap_(userProfile.userId);
     } catch (e) {
       hideLoader();
-      if (cached && cached.ok) return; // keep cache UI
       renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
       return;
     }
@@ -473,15 +397,11 @@
 
     writeBootCache_(userProfile.userId, boot);
 
-    if (!boot.onboarded) {
-      clearSuccess_();
-      renderFirstTime_();
-      hideLoader();
-      return;
-    }
+    // ✅ If already onboarded => redirect out immediately
+    if (redirectIfAlreadyOnboarded_(boot)) return;
 
-    // onboarded
-    renderAlreadyRegistered_(boot.role, boot.name, boot.nickname);
+    // Not onboarded => allow first-time register UI
+    clearSuccess_();
     hideLoader();
   }
 
