@@ -12,25 +12,25 @@
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
-    
+
     .type-btn { width:100%; text-align:left; padding:1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#6B7280; transition:.2s; position:relative; }
     .type-btn:active { transform: scale(.98); }
     .type-btn.selected { border-color:#3B82F6; background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:600; }
     .type-btn.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563EB; font-weight:bold; }
-    
+
     .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
     .input:focus { background:#fff; border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
-    
+
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
-    
+
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
 
 <body class="pb-32 antialiased">
   <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
-    
+
     <div class="bg-white px-6 pt-10 pb-4 rounded-b-3xl shadow-sm mb-5 relative z-10 border-b border-slate-100">
       <div class="flex items-center gap-4">
         <div id="avatarBox" class="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md ring-2 ring-blue-50 hidden">
@@ -46,7 +46,7 @@
     </div>
 
     <div class="px-5 space-y-6 flex-1" id="formUI">
-      
+
       <div class="space-y-3">
         <div class="flex justify-between items-center px-1 h-7">
           <label class="text-sm font-bold text-[#1F2937]">Leave Type <span class="text-[#EF4444]">*</span></label>
@@ -120,13 +120,13 @@
 
       <div class="card bg-[#FFF7ED] border border-[#FFEDD5]">
         <div class="text-sm font-bold text-[#C2410C] mb-2">Attachment</div>
-        
+
         <div class="space-y-1.5">
           <div class="text-[11px] text-[#EA580C] font-semibold flex items-start gap-1.5">
             <span class="text-xs mt-0.5">⚠️</span>
             <span>ลาป่วย ≥ 3 วันต้องแนบใบรับรองแพทย์</span>
           </div>
-          
+
           <div class="text-[11px] text-[#EA580C] font-semibold flex items-start gap-1.5 leading-relaxed">
             <span class="text-xs mt-0.5">📎</span>
             <span>แนบไฟล์ในแชทได้เลย (JPG / PDF)</span>
@@ -154,6 +154,13 @@
   // ======= CONFIG =======
   const LIFF_ID = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
+
+  // Login page (GitHub Pages)
+  const LOGIN_PAGE = "login.html";
+
+  // localStorage cache for onboarding/role
+  const ROLE_CACHE_KEY = "leave_onboard_v1";
+  const ROLE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
   // ======================
 
   let companyHolidays = [];
@@ -166,21 +173,104 @@
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
   function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
 
-  // ✅ NEW: register requester to All_Requester (non-blocking)
-  async function registerRequester_() {
+  // ---------- Onboarding cache ----------
+  function readRoleCache_(userId) {
     try {
-      if (!userProfile || !userProfile.userId) return;
+      const raw = localStorage.getItem(ROLE_CACHE_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || obj.userId !== userId) return null;
+      return obj;
+    } catch(e) { return null; }
+  }
+  function writeRoleCache_(payload) {
+    try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
+  }
+  function isCacheFresh_(obj) {
+    if (!obj || !obj.ts) return false;
+    return (Date.now() - Number(obj.ts || 0)) <= ROLE_CACHE_TTL_MS;
+  }
 
-      // fire-and-forget (but still awaitable)
-      await postFormUrlEncoded_({
-        action: "register_requester",
+  async function apiCheckUser_(userId) {
+    const res = await fetch(API_URL + "?action=check_user&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+    return res.json();
+  }
+
+  function redirectToLogin_() {
+    const ret = location.pathname + location.search;
+    const url = LOGIN_PAGE + "?return=" + encodeURIComponent(ret);
+    location.replace(url);
+  }
+
+  function showAccessDenied_(msg) {
+    $("bottomBar").classList.add("hidden");
+    $("formUI").innerHTML = `
+      <div class="card text-center py-10 mt-6">
+        <div class="text-4xl mb-3">🔒</div>
+        <div class="text-lg font-bold text-[#1F2937]">Access Denied</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${msg || "ไม่สามารถใช้งานหน้านี้ได้"}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="doneAndExit()">Close</button>
+      </div>
+    `;
+  }
+
+  // Non-blocking refresh (for speed)
+  async function refreshOnboardCacheNonBlocking_() {
+    try {
+      if (!userProfile?.userId) return;
+      const r = await apiCheckUser_(userProfile.userId);
+      if (!r || !r.ok) return;
+
+      if (!r.onboarded) {
+        writeRoleCache_({ userId: userProfile.userId, onboarded: false, ts: Date.now() });
+        return;
+      }
+
+      writeRoleCache_({
         userId: userProfile.userId,
-        displayName: userProfile.displayName || "",
-        active: "Y"
+        onboarded: true,
+        role: String(r.role || ""),
+        name: String(r.name || ""),
+        ts: Date.now()
       });
-    } catch (e) {
-      // silent: never block UI
-      console.warn("register_requester failed:", e);
+    } catch(e) {
+      // silent
+      console.warn("check_user failed:", e);
+    }
+  }
+
+  // Block only when needed (submit-time enforcement)
+  async function ensureRequesterReady_() {
+    const uid = userProfile?.userId;
+    if (!uid) return { ok:false, error:"missing_userId" };
+
+    const cached = readRoleCache_(uid);
+
+    // If cached onboarded+Requester, good
+    if (cached?.onboarded && String(cached.role).toLowerCase() === "requester") {
+      return { ok:true, role:"Requester" };
+    }
+
+    // Otherwise, do a blocking check (submit-time only)
+    try {
+      const r = await apiCheckUser_(uid);
+      if (!r || !r.ok) return { ok:false, error: String(r?.error || "check_user_failed") };
+
+      if (!r.onboarded) {
+        writeRoleCache_({ userId: uid, onboarded:false, ts: Date.now() });
+        return { ok:false, error:"not_onboarded" };
+      }
+
+      const role = String(r.role || "");
+      writeRoleCache_({ userId: uid, onboarded:true, role, name: String(r.name||""), ts: Date.now() });
+
+      if (role.toLowerCase() !== "requester") {
+        return { ok:false, error:"role_mismatch", role };
+      }
+
+      return { ok:true, role:"Requester" };
+    } catch(e) {
+      return { ok:false, error:"network_error" };
     }
   }
 
@@ -303,11 +393,11 @@
     if (days > 1) {
       if ($('durationValue').value !== 'Full Day') selectDur(durBtns[0], 'Full Day');
       durBtns[1].disabled = true; durBtns[2].disabled = true;
-      durBtns[1].classList.add('opacity-40', 'cursor-not-allowed'); 
+      durBtns[1].classList.add('opacity-40', 'cursor-not-allowed');
       durBtns[2].classList.add('opacity-40', 'cursor-not-allowed');
     } else {
       durBtns[1].disabled = false; durBtns[2].disabled = false;
-      durBtns[1].classList.remove('opacity-40', 'cursor-not-allowed'); 
+      durBtns[1].classList.remove('opacity-40', 'cursor-not-allowed');
       durBtns[2].classList.remove('opacity-40', 'cursor-not-allowed');
     }
 
@@ -358,7 +448,7 @@
       doneAndExit(); // ปิด LIFF
       return;
     }
-    
+
     const type = r.leaveType || "";
     if (type) {
       const btnMap = { Sick:0, Annual:1, Personal:2, Other:3 };
@@ -368,8 +458,8 @@
     }
 
     $('otherSpecify').value = r.otherSpecify || "";
-    
-    // ตั้งค่า Date 
+
+    // ตั้งค่า Date
     $('startDate').value = toDateInputValue_(r.startDate) || $('startDate').value;
     $('endDate').value = toDateInputValue_(r.endDate) || $('endDate').value;
 
@@ -385,6 +475,22 @@
 
   // === Submit ===
   async function handleSubmit() {
+    // Enforce onboarding/role at submit-time (min latency on open)
+    const guard = await ensureRequesterReady_();
+    if (!guard.ok) {
+      if (guard.error === "not_onboarded") {
+        alert("กรุณา Login / Setup ก่อนใช้งานค่ะ");
+        redirectToLogin_();
+        return;
+      }
+      if (guard.error === "role_mismatch") {
+        showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น " + (guard.role || "Approver") + " จึงไม่สามารถใช้งานหน้านี้ได้");
+        return;
+      }
+      alert("ไม่สามารถตรวจสอบสิทธิ์ได้ กรุณาลองใหม่อีกครั้งค่ะ");
+      return;
+    }
+
     const type = $('leaveTypeValue').value;
     const startDate = $('startDate').value;
     const endDate = $('endDate').value;
@@ -423,9 +529,9 @@
       }
 
       await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]);
-      
+
       hideLoader();
-      
+
       $('bottomBar').classList.add('hidden');
       $('formUI').innerHTML = `
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
@@ -434,9 +540,9 @@
           <div class="text-sm text-[#9CA3AF] mt-2">ยืนยันรายการต่อในแชท</div>
         </div>
       `;
-      
+
       setTimeout(() => doneAndExit(), 1500);
-      
+
     } catch (e) {
       hideLoader();
       $('submitBtn').disabled = false;
@@ -448,7 +554,7 @@
   async function init() {
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
-    
+
     if (!liff.isLoggedIn()) { liff.login(); return; }
 
     const params = new URLSearchParams(location.search);
@@ -463,13 +569,21 @@
 
     userProfile = await liff.getProfile();
     $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}</span>`;
-    if (userProfile.pictureUrl) { 
-      $('profileImg').src = userProfile.pictureUrl; 
-      $('avatarBox').classList.remove('hidden'); 
+    if (userProfile.pictureUrl) {
+      $('profileImg').src = userProfile.pictureUrl;
+      $('avatarBox').classList.remove('hidden');
     }
 
-    // NEW: auto register requester (do not block)
-    registerRequester_();
+    // Fast role check via cache (avoid slowing open)
+    const cached = readRoleCache_(userProfile.userId);
+    if (cached?.onboarded && String(cached.role || "").toLowerCase() === "approver") {
+      hideLoader();
+      showAccessDenied_("บัญชีของคุณลงทะเบียนเป็น Approver จึงไม่สามารถใช้งานหน้านี้ได้");
+      return;
+    }
+
+    // Refresh role cache in background (non-blocking)
+    refreshOnboardCacheNonBlocking_();
 
     const isEdit = (mode === "edit" && !!requestId);
 
@@ -478,7 +592,7 @@
     $('endDate').setAttribute("min", today);
 
     if (!isEdit) {
-      $('startDate').value = today; 
+      $('startDate').value = today;
       $('endDate').value = today;
     }
 
