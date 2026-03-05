@@ -17,13 +17,14 @@
     .input:focus { background:#fff; border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
 
-    .role-btn { width:100%; text-align:left; padding:1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#6B7280; transition:.2s; position:relative; }
-    .role-btn:active { transform: scale(.98); }
-    .role-btn.selected { border-color:#3B82F6; background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:600; }
-    .role-btn.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563EB; font-weight:bold; }
-
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
 
+    .option-btn { width:100%; text-align:left; padding:.85rem 1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#374151; transition:.2s; }
+    .option-btn:active { transform: scale(.98); }
+    .option-btn:hover { background:#F3F4F6; }
+    .option-btn.selected { border-color:#3B82F6; background:#EFF6FF; box-shadow:0 4px 12px rgba(59,130,246,.12); }
+
+    .dropdown-box { max-height: 280px; overflow:auto; }
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
@@ -42,7 +43,7 @@
             <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
           </p>
         </div>
-        <span id="roleBadge" class="hidden info-badge">Role: -</span>
+        <span id="statusBadge" class="hidden info-badge">-</span>
       </div>
     </div>
 
@@ -64,27 +65,37 @@
   </div>
 
 <script>
-  // ======= CONFIG =======
   const LIFF_ID  = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
 
   const DEFAULT_RETURN = "index.html";
 
-  const ROLE_CACHE_KEY = "leave_onboard_v1";
-  const BOOT_CACHE_KEY = "leave_boot_v1";
-  const BOOT_TTL_MS = 3 * 60 * 1000;
+  const BOOT_CACHE_KEY = "leave_boot_v2";
+  const SUCCESS_KEY = "leave_login_success_v2";
 
-  const SUCCESS_KEY = "leave_login_success_v1";
-  // ======================
+  const BOOT_TTL_OK_MS = 3 * 60 * 1000;
+  const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
   const $ = (id) => document.getElementById(id);
 
   let userProfile = null;
-  const selectedRoles = new Set(); // "Requester" | "Approver"
+  let bootPayload = null;
+  let approverOptions = [];
+  let filteredApprovers = [];
+  let selectedApproverUserId = "";
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
-  function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
+
+  function doneAndExit(){
+    try {
+      if (window.liff && liff.isInClient()) {
+        liff.closeWindow();
+        return;
+      }
+    } catch(e) {}
+    goReturn_();
+  }
 
   function markSuccess_(){ try { sessionStorage.setItem(SUCCESS_KEY, "1"); } catch(e) {} }
   function wasSuccess_(){ try { return sessionStorage.getItem(SUCCESS_KEY) === "1"; } catch(e) { return false; } }
@@ -100,15 +111,25 @@
     $("title").textContent = title || "Welcome 👋";
     $("subTitle").innerHTML = subtitle || "";
   }
-  function setRoleBadge_(roleText) {
-    const b = $("roleBadge");
-    if (!roleText) { b.classList.add("hidden"); return; }
-    b.textContent = roleText;
+
+  function setStatusBadge_(text) {
+    const b = $("statusBadge");
+    if (!text) {
+      b.classList.add("hidden");
+      return;
+    }
+    b.textContent = text;
     b.classList.remove("hidden");
   }
 
-  function writeRoleCache_(payload) {
-    try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
+  function getReturnUrl_() {
+    const params = new URLSearchParams(location.search);
+    const ret = params.get("return");
+    return ret ? decodeURIComponent(ret) : DEFAULT_RETURN;
+  }
+
+  function goReturn_() {
+    location.replace(getReturnUrl_());
   }
 
   function readBootCache_(userId){
@@ -116,19 +137,30 @@
       const raw = localStorage.getItem(BOOT_CACHE_KEY);
       if(!raw) return null;
       const obj = JSON.parse(raw);
-      if(!obj || obj.userId !== userId) return null;
-      if(Date.now() - (obj.ts||0) > BOOT_TTL_MS) return null;
-      return obj.payload;
-    }catch(e){ return null; }
+      if (!obj || obj.userId !== userId) return null;
+
+      const ttl = obj.onboarded ? BOOT_TTL_OK_MS : BOOT_TTL_NOT_OK_MS;
+      if (Date.now() - (obj.ts || 0) > ttl) return null;
+
+      return obj.payload || null;
+    } catch(e){
+      return null;
+    }
   }
+
   function writeBootCache_(userId, payload){
     try{
-      localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({ userId, ts: Date.now(), payload }));
-    }catch(e){}
+      localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({
+        userId,
+        ts: Date.now(),
+        onboarded: !!payload?.onboarded,
+        payload
+      }));
+    } catch(e){}
   }
 
   async function apiBootstrap_(userId){
-    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId));
+    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
     return res.json();
   }
 
@@ -143,73 +175,172 @@
     return res.json();
   }
 
-  function getReturnUrl_() {
-    const params = new URLSearchParams(location.search);
-    const ret = params.get("return");
-    return ret ? decodeURIComponent(ret) : DEFAULT_RETURN;
-  }
-  function goReturn_() {
-    location.replace(getReturnUrl_());
+  function filterApproverOptions_(keyword) {
+    const q = String(keyword || "").trim().toLowerCase();
+    const list = approverOptions.filter(x => String(x.userId || "") !== String(userProfile?.userId || ""));
+    if (!q) return list;
+
+    return list.filter(x => {
+      const hay = [
+        x.label,
+        x.fullName,
+        x.nickname,
+        x.displayName
+      ].map(v => String(v || "").toLowerCase()).join(" | ");
+      return hay.indexOf(q) > -1;
+    });
   }
 
-  // ✅ Requirement: login shows ONLY when not onboarded
-  function redirectIfAlreadyOnboarded_(boot) {
-    if (boot && boot.ok && boot.onboarded) {
-      goReturn_();
-      return true;
+  function renderApproverOptions_() {
+    const box = $("approverOptionsBox");
+    if (!box) return;
+
+    if (!filteredApprovers.length) {
+      box.innerHTML = `
+        <div class="text-sm text-[#9CA3AF] text-center py-6">
+          ไม่พบ Approver ที่ตรงกับคำค้นหา
+        </div>
+      `;
+      return;
     }
-    return false;
+
+    box.innerHTML = filteredApprovers.map(opt => {
+      const selected = String(opt.userId) === String(selectedApproverUserId);
+      return `
+        <button type="button"
+          class="option-btn ${selected ? "selected" : ""}"
+          onclick="selectApprover_('${escapeHtml_(opt.userId)}')">
+          <div class="text-sm font-bold text-[#1F2937]">${escapeHtml_(opt.label || "-")}</div>
+          <div class="text-[11px] text-[#9CA3AF] mt-1 font-mono">${escapeHtml_(opt.userId || "")}</div>
+        </button>
+      `;
+    }).join("");
   }
 
-  // -------- UI screens --------
-  function renderFirstTime_() {
-    selectedRoles.clear();
-    setRoleBadge_("");
+  function selectApprover_(userId) {
+    selectedApproverUserId = String(userId || "");
+    const picked = approverOptions.find(x => String(x.userId) === selectedApproverUserId);
 
-    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`);
+    $("approverUserId").value = selectedApproverUserId;
+    $("approverSearch").value = picked ? String(picked.label || "") : "";
+    $("approverErr")?.classList.add("hidden");
+    $("approverSearch")?.classList.remove("err");
+
+    filteredApprovers = filterApproverOptions_($("approverSearch").value);
+    renderApproverOptions_();
+  }
+
+  function onApproverSearchInput_() {
+    selectedApproverUserId = "";
+    $("approverUserId").value = "";
+    $("approverErr")?.classList.add("hidden");
+    $("approverSearch")?.classList.remove("err");
+
+    filteredApprovers = filterApproverOptions_($("approverSearch").value);
+    renderApproverOptions_();
+  }
+
+  function clearNameErr_() {
+    $("nameErr")?.classList.add("hidden");
+    $("fullName")?.classList.remove("err");
+  }
+
+  function showNameErr_() {
+    $("nameErr")?.classList.remove("hidden");
+    $("fullName")?.classList.add("err");
+    $("fullName")?.addEventListener("input", clearNameErr_, { once: true });
+  }
+
+  function clearApproverErr_() {
+    $("approverErr")?.classList.add("hidden");
+    $("approverSearch")?.classList.remove("err");
+  }
+
+  function showApproverErr_() {
+    $("approverErr")?.classList.remove("hidden");
+    $("approverSearch")?.classList.add("err");
+    $("approverSearch")?.addEventListener("input", clearApproverErr_, { once: true });
+  }
+
+  function renderForm_(boot) {
+    const emp = boot?.employee || {};
+    const isFirstUser = !!boot?.isFirstUser;
+    const hasExisting = !!(emp && emp.userId);
+
+    setHeader_(
+      "Welcome 👋",
+      `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`
+    );
+    setStatusBadge_(isFirstUser ? "First user" : (hasExisting ? "Update" : "Register"));
+
+    approverOptions = Array.isArray(boot?.approverOptions) ? boot.approverOptions : [];
+    filteredApprovers = filterApproverOptions_("");
+    selectedApproverUserId = String(emp?.approverUserId || "");
+
+    const selectedLabel = approverOptions.find(x => String(x.userId) === selectedApproverUserId)?.label || "";
 
     $("rootBox").innerHTML = `
       <div class="card space-y-4">
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
-          <input id="fullName" type="text" class="input" placeholder="Please enter your full name" />
+          <input id="fullName" type="text" class="input" placeholder="Please enter your full name" value="${escapeHtml_(emp?.fullName || "")}" />
           <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
         </div>
 
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
-          <input id="nickname" type="text" class="input" placeholder="Please enter your nickname" />
+          <input id="nickname" type="text" class="input" placeholder="Please enter your nickname" value="${escapeHtml_(emp?.nickname || "")}" />
         </div>
       </div>
 
       <div class="space-y-3">
         <div class="flex justify-between items-center px-1 h-7">
-          <label class="text-sm font-bold text-[#1F2937]">Role <span class="text-[#EF4444]">*</span></label>
+          <label class="text-sm font-bold text-[#1F2937]">
+            Approver ${isFirstUser ? "" : '<span class="text-[#EF4444]">*</span>'}
+          </label>
         </div>
 
-        <div class="grid grid-cols-1 gap-3">
-          <button type="button" class="role-btn" onclick="toggleRole_('Requester', this)">
-            <div class="text-2xl mb-1">📝</div>
-            <span class="text-sm font-medium">Requester</span>
-          </button>
+        <div class="card space-y-3">
+          <input type="hidden" id="approverUserId" value="${escapeHtml_(selectedApproverUserId)}" />
 
-          <button type="button" class="role-btn" onclick="toggleRole_('Approver', this)">
-            <div class="text-2xl mb-1">✅</div>
-            <span class="text-sm font-medium">Approver</span>
-          </button>
-        </div>
-
-        <div id="roleErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1">กรุณาเลือกอย่างน้อย 1 Role</div>
-
-        <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
-          <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
-          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-            Your role is set once and can’t be changed. Contact an admin if you need an update.
+          <div>
+            <input
+              id="approverSearch"
+              type="text"
+              class="input"
+              placeholder="${isFirstUser ? 'Search approver (optional for first user)' : 'Search approver by name or nickname'}"
+              value="${escapeHtml_(selectedLabel)}"
+              oninput="onApproverSearchInput_()"
+            />
+            <div id="approverErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณาเลือก Approver ก่อนลงทะเบียน</div>
           </div>
+
+          <div id="approverOptionsBox" class="dropdown-box space-y-2"></div>
         </div>
+
+        ${
+          isFirstUser
+          ? `
+            <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+              <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
+              <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+                You are the first active user in this system, so you can complete registration without selecting an approver.
+              </div>
+            </div>
+          `
+          : `
+            <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+              <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
+              <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+                Please select your approver to complete onboarding.
+              </div>
+            </div>
+          `
+        }
       </div>
     `;
 
+    renderApproverOptions_();
     $("bottomBar").classList.remove("hidden");
     $("submitBtn").textContent = "ลงทะเบียน";
     $("submitBtn").disabled = false;
@@ -217,8 +348,7 @@
 
   function renderSystemError_(msg) {
     setHeader_("Something went wrong", "Please try again");
-    setRoleBadge_("");
-
+    setStatusBadge_("");
     $("rootBox").innerHTML = `
       <div class="card text-center py-10">
         <div class="text-4xl mb-3">⚠️</div>
@@ -231,39 +361,21 @@
     $("bottomBar").classList.add("hidden");
   }
 
-  // -------- Role selector (multi) --------
-  function toggleRole_(role, btn) {
-    if (selectedRoles.has(role)) {
-      selectedRoles.delete(role);
-      btn.classList.remove("selected");
-    } else {
-      selectedRoles.add(role);
-      btn.classList.add("selected");
-    }
-    $("roleErr")?.classList.add("hidden");
-  }
-
-  function clearNameErr_() {
-    $("nameErr")?.classList.add("hidden");
-    $("fullName")?.classList.remove("err");
-  }
-  function showNameErr_() {
-    $("nameErr")?.classList.remove("hidden");
-    $("fullName")?.classList.add("err");
-    $("fullName")?.addEventListener("input", clearNameErr_, { once: true });
-  }
-  function showRoleErr_() { $("roleErr")?.classList.remove("hidden"); }
-
-  // -------- Submit --------
   async function handleSubmit() {
     try {
       const fullName = ($("fullName")?.value || "").trim();
       const nickname = ($("nickname")?.value || "").trim();
+      const approverUserId = ($("approverUserId")?.value || "").trim();
 
-      if (!fullName) { showNameErr_(); return; }
-      if (selectedRoles.size === 0) { showRoleErr_(); return; }
+      if (!fullName) {
+        showNameErr_();
+        return;
+      }
 
-      const rolesCsv = Array.from(selectedRoles).join(",");
+      if (!bootPayload?.isFirstUser && !approverUserId) {
+        showApproverErr_();
+        return;
+      }
 
       showLoader("Registering...");
       $("submitBtn").disabled = true;
@@ -274,7 +386,7 @@
         displayName: userProfile.displayName || "",
         fullName,
         nickname,
-        roles: rolesCsv
+        approverUserId
       });
 
       if (!data || !data.ok) {
@@ -284,58 +396,27 @@
         return;
       }
 
-      // update caches
-      writeRoleCache_({
-        userId: userProfile.userId,
-        onboarded: true,
-        role: String(data.role || "Requester"),
-        roles: data.roles || [],
-        canRequester: !!data.canRequester,
-        canApprover: !!data.canApprover,
-        name: fullName,
-        nickname,
-        ts: Date.now()
-      });
-
       writeBootCache_(userProfile.userId, {
         ok: true,
-        onboarded: true,
-        role: String(data.role || "Requester"),
-        roles: data.roles || [],
-        canRequester: !!data.canRequester,
-        canApprover: !!data.canApprover,
-        name: fullName,
-        nickname,
-        displayName: userProfile.displayName || ""
+        onboarded: !!data.onboarded,
+        isFirstUser: !!data.isFirstUser,
+        employee: data.employee || null,
+        approverOptions: data.approverOptions || []
       });
 
       hideLoader();
-
       markSuccess_();
       $("bottomBar").classList.add("hidden");
 
-      // ✅ NEW: Approver-only => close LIFF automatically
-      const isApproverOnly = (data.canApprover === true && data.canRequester === false);
-
-      if (isApproverOnly) {
-        $("rootBox").innerHTML = `
-          <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
-            <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
-            <div class="text-xl font-bold text-[#1F2937]">Registration complete.</div>
-          </div>
-        `;
-        setTimeout(() => doneAndExit(), 700);
-        return;
-      }
-
-      // Requester (or RA) => go return (index)
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
-          <div class="text-xl font-bold text-[#1F2937]">Registration complete.</div>
+          <div class="text-xl font-bold text-[#1F2937]">You’re all set!</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">Registration complete.</div>
         </div>
       `;
-      setTimeout(() => goReturn_(), 700);
+
+      setTimeout(() => doneAndExit(), 700);
 
     } catch (e) {
       hideLoader();
@@ -344,23 +425,27 @@
     }
   }
 
-  // -------- Init --------
   async function init() {
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
 
-    if (!liff.isLoggedIn()) { liff.login(); return; }
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
 
-    // if just registered successfully then reload => go return (safe)
     if (wasSuccess_()) {
       $("bottomBar").classList.add("hidden");
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4">✅</div>
-          <div class="text-xl font-bold text-[#1F2937]">Registerd Successfully</div>
+          <div class="text-xl font-bold text-[#1F2937]">You’re all set!</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">Registration complete.</div>
         </div>
       `;
-      setTimeout(() => goReturn_(), 500);
+      clearSuccess_();
+      hideLoader();
+      setTimeout(() => doneAndExit(), 500);
       return;
     }
 
@@ -371,17 +456,29 @@
       $("avatarBox").classList.remove("hidden");
     }
 
-    renderFirstTime_();
-    hideLoader();
+    const cached = readBootCache_(userProfile.userId);
+    if (cached && cached.ok) {
+      bootPayload = cached;
 
-    // enforce "login only when not onboarded"
+      if (bootPayload.onboarded) {
+        hideLoader();
+        goReturn_();
+        return;
+      }
+
+      renderForm_(bootPayload);
+      hideLoader();
+    }
+
     let boot = null;
     try {
       showLoader("Checking access...");
       boot = await apiBootstrap_(userProfile.userId);
     } catch (e) {
-      hideLoader();
-      renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+      if (!cached) {
+        hideLoader();
+        renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+      }
       return;
     }
 
@@ -391,11 +488,16 @@
       return;
     }
 
-    writeBootCache_(userProfile.userId, boot);
+    bootPayload = boot;
+    writeBootCache_(userProfile.userId, bootPayload);
 
-    if (redirectIfAlreadyOnboarded_(boot)) return;
+    if (bootPayload.onboarded) {
+      hideLoader();
+      goReturn_();
+      return;
+    }
 
-    clearSuccess_();
+    renderForm_(bootPayload);
     hideLoader();
   }
 
@@ -407,3 +509,6 @@
 </script>
 </body>
 </html>
+
+
+
