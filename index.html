@@ -283,7 +283,7 @@
 
     if (!boot?.employee?.userId) {
       regBox.classList.remove("hidden");
-      setSubmitEnabled_(false, "Please complete your registration before submitting leave.");
+      setSubmitEnabled_(false, "กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
       return;
     }
 
@@ -489,7 +489,7 @@
 
   async function handleSubmit() {
     if (!bootPayload?.employee?.userId) {
-      alert("Please complete your registration before submitting leave.");
+      alert("กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
       redirectToLogin_();
       return;
     }
@@ -542,7 +542,7 @@
         $('submitBtn').disabled = false;
 
         if (errCode === "employee_not_found" || errCode === "registration_incomplete") {
-          alert("Please complete your registration before submitting leave.");
+          alert("กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
           redirectToLogin_();
           return;
         }
