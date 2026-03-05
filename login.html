@@ -67,7 +67,7 @@
     <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F3F4F6] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
       <button id="submitBtn" onclick="handleSubmit()"
         class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all">
-        Save
+        ลงทะเบียน
       </button>
     </div>
 
@@ -431,7 +431,7 @@
       const nickname = ($("nickname")?.value || "").trim();
       const approverUserId = String($("approverUserId")?.value || "").trim();
 
-      showLoader("Saving...");
+      showLoader("Registering...");
       setBtnDisabled_(true);
 
       const data = await postFormUrlEncoded_({
