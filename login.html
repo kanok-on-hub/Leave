@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
-  <title>Leave Request</title>
+  <title>Leave Management</title>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -13,28 +13,23 @@
     body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
     .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
 
-    .type-btn { width:100%; text-align:left; padding:1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#6B7280; transition:.2s; position:relative; }
-    .type-btn:active { transform: scale(.98); }
-    .type-btn.selected { border-color:#3B82F6; background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,.15); font-weight:600; }
-    .type-btn.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563EB; font-weight:bold; }
-
     .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
     .input:focus { background:#fff; border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
     .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
 
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
 
-    .date-input { font-size: 0.85rem; padding: 0.6rem; border-radius: 0.75rem; }
-    @media (min-width: 380px) { .date-input { font-size: 0.9rem; padding: 0.7rem; } }
+    .option-btn { width:100%; text-align:left; padding:.85rem 1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#374151; transition:.2s; }
+    .option-btn:active { transform: scale(.98); }
+    .option-btn:hover { background:#F3F4F6; }
+    .option-btn.selected { border-color:#3B82F6; background:#EFF6FF; box-shadow:0 4px 12px rgba(59,130,246,.12); }
 
-    .btn-disabled { opacity: .55; cursor: not-allowed; }
-    .subhint { font-size: 11px; font-weight: 600; color:#9CA3AF; text-align:center; margin-top:.5rem; }
-
+    .dropdown-box { max-height: 280px; overflow:auto; }
     ::-webkit-scrollbar { display: none; }
   </style>
 </head>
 
-<body class="pb-32 antialiased">
+<body class="pb-24 antialiased">
   <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
 
     <div class="bg-white px-6 pt-10 pb-4 rounded-b-3xl shadow-sm mb-5 relative z-10 border-b border-slate-100">
@@ -42,129 +37,23 @@
         <div id="avatarBox" class="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md ring-2 ring-blue-50 hidden">
           <img id="profileImg" src="" class="w-full h-full object-cover" alt="profile">
         </div>
-        <div>
-          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Leave Request 📝</h1>
-          <p id="userGreet" class="text-[#9CA3AF] text-sm font-medium mt-0.5 flex items-center gap-1">
+        <div class="flex-1">
+          <h1 id="title" class="text-2xl font-bold text-[#1F2937] tracking-tight">Welcome 👋</h1>
+          <p id="subTitle" class="text-[#9CA3AF] text-sm font-medium mt-0.5 flex items-center gap-1">
             <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
           </p>
         </div>
+        <span id="statusBadge" class="hidden info-badge">-</span>
       </div>
     </div>
 
-    <div class="px-5 space-y-6 flex-1" id="formUI">
-
-      <div id="registrationNotice" class="hidden card bg-[#FFF7ED] border border-[#FED7AA]">
-        <div class="text-sm font-bold text-[#C2410C] mb-2">Registration required</div>
-        <div class="text-[12px] text-[#9A3412] leading-relaxed">
-          ไม่พบผู้อนุมัติในระบบกรุณาติดต่อแอดมิน.
-        </div>
-        <button onclick="redirectToLogin_()" class="w-full mt-4 bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-3 rounded-2xl font-bold transition-all">
-          Complete Registration
-        </button>
-      </div>
-
-      <div id="approverNotice" class="hidden card bg-[#FFF7ED] border border-[#FED7AA]">
-        <div class="text-sm font-bold text-[#C2410C] mb-2">Approver required</div>
-        <div class="text-[12px] text-[#9A3412] leading-relaxed">
-          Approver is required before you can submit this request.
-        </div>
-        <button onclick="redirectToLogin_()" class="w-full mt-4 bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-3 rounded-2xl font-bold transition-all">
-          Update Registration
-        </button>
-      </div>
-
-      <div class="space-y-3">
-        <div class="flex justify-between items-center px-1 h-7">
-          <label class="text-sm font-bold text-[#1F2937]">Leave Type <span class="text-[#EF4444]">*</span></label>
-          <span id="remainingBox" class="hidden info-badge">Remaining:&nbsp;<span id="remainingValue" class="ml-0.5">-</span></span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <button type="button" onclick="selectType(this,'Sick')" class="type-btn group"><div class="text-2xl mb-1">🤒</div><span class="text-sm font-medium">Sick Leave</span></button>
-          <button type="button" onclick="selectType(this,'Annual')" class="type-btn group"><div class="text-2xl mb-1">🏖️</div><span class="text-sm font-medium">Annual Leave</span></button>
-          <button type="button" onclick="selectType(this,'Personal')" class="type-btn group"><div class="text-2xl mb-1">🚗</div><span class="text-sm font-medium">Personal Leave</span></button>
-          <button type="button" onclick="selectType(this,'Other')" class="type-btn group"><div class="text-2xl mb-1">📝</div><span class="text-sm font-medium">Other</span></button>
-        </div>
-        <input type="hidden" id="leaveTypeValue">
-      </div>
-
-      <div id="otherField" class="hidden space-y-2">
-        <label class="text-sm font-bold text-[#3B82F6] ml-1 italic">Please specify Other type *</label>
-        <input type="text" id="otherSpecify" class="input" placeholder="e.g. Ordination, Marriage">
-      </div>
-
-      <div class="card space-y-4">
-        <div class="flex items-center justify-between border-b border-[#F3F4F6] pb-3 h-10">
-          <label class="text-sm font-bold text-[#1F2937]">Date <span class="text-[#EF4444]">*</span></label>
-          <span id="dayBadge" class="info-badge hidden">Working: 0 Days</span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-1.5">
-            <div class="text-[11px] uppercase tracking-wider font-bold text-[#9CA3AF]">Start Date</div>
-            <input type="date" id="startDate" class="input date-input text-center font-bold text-[#1F2937]" onchange="validateOnFly()">
-          </div>
-          <div class="space-y-1.5">
-            <div class="text-[11px] uppercase tracking-wider font-bold text-[#9CA3AF]">End Date</div>
-            <input type="date" id="endDate" class="input date-input text-center font-bold text-[#1F2937]" onchange="validateOnFly()">
-          </div>
-        </div>
-
-        <div id="quotaError" class="hidden bg-[#FEF2F2] border border-[#FCA5A5] rounded-xl p-3 flex items-start gap-3 shadow-sm">
-          <div class="text-[#EF4444] mt-0.5 text-lg">⚠️</div>
-          <div>
-            <p class="text-xs font-bold text-[#B91C1C]">Quota Exceeded</p>
-            <p class="text-[11px] text-[#7F1D1D] leading-tight mt-1">
-              You requested <span id="reqDaysDisplay" class="font-bold"></span> days, but you only have
-              <span id="remDaysDisplay" class="font-bold underline"></span> days remaining.
-            </p>
-          </div>
-        </div>
-
-        <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
-          <span class="text-[#94A3B8] mt-0.5">ℹ️</span>
-          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-            Weekends & Company Holidays are automatically excluded from the calculation.
-          </div>
-        </div>
-      </div>
-
-      <div class="card space-y-3">
-        <label class="text-sm font-bold text-[#1F2937] block">Duration <span class="text-[#EF4444]">*</span></label>
-        <div class="flex bg-[#F1F5F9] p-1.5 rounded-xl gap-1">
-          <button type="button" onclick="selectDur(this,'Full Day')" class="dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-[#2563EB] ring-1 ring-black/5">Full Day</button>
-          <button type="button" onclick="selectDur(this,'Morning')" class="dur-btn flex-1 py-2.5 text-sm font-medium text-[#64748B] hover:text-[#334155] transition-colors">Morning</button>
-          <button type="button" onclick="selectDur(this,'Afternoon')" class="dur-btn flex-1 py-2.5 text-sm font-medium text-[#64748B] hover:text-[#334155] transition-colors">Afternoon</button>
-        </div>
-        <input type="hidden" id="durationValue" value="Full Day">
-      </div>
-
-      <div class="space-y-2">
-        <label class="text-sm font-bold text-[#1F2937] ml-1">Reason <span class="text-[#EF4444]">*</span></label>
-        <textarea id="reason" rows="3" class="input resize-none" placeholder="Please specify your reason" oninput="validateOnFly()"></textarea>
-      </div>
-
-      <div class="card bg-[#FFF7ED] border border-[#FFEDD5]">
-        <div class="text-sm font-bold text-[#C2410C] mb-2">Attachment</div>
-        <div class="space-y-1.5">
-          <div class="text-[11px] text-[#EA580C] font-semibold flex items-start gap-1.5">
-            <span class="text-xs mt-0.5">⚠️</span>
-            <span>ลาป่วย ≥ 3 วันต้องแนบใบรับรองแพทย์</span>
-          </div>
-          <div class="text-[11px] text-[#EA580C] font-semibold flex items-start gap-1.5 leading-relaxed">
-            <span class="text-xs mt-0.5">📎</span>
-            <span>แนบไฟล์ในแชทได้เลย (JPG / PDF)</span>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div class="px-5 space-y-5 flex-1" id="rootBox"></div>
 
     <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F3F4F6] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
       <button id="submitBtn" onclick="handleSubmit()"
         class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all">
-        บันทึกร่าง
+        ลงทะเบียน
       </button>
-      <div id="submitHint" class="subhint hidden">กำลังโหลดข้อมูลการใช้งาน…</div>
     </div>
 
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
@@ -176,25 +65,26 @@
   </div>
 
 <script>
-  const LIFF_ID = "2008997153-n5oIYKUP";
+  const LIFF_ID  = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
 
-  const LOGIN_PAGE = "login.html";
-  const REMARK_PAGE = "remark.html";
+  const DEFAULT_RETURN = "index.html";
 
   const BOOT_CACHE_KEY = "leave_boot_v2";
+  const SUCCESS_KEY = "leave_login_success_v2";
+
   const BOOT_TTL_OK_MS = 3 * 60 * 1000;
   const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
-  let companyHolidays = [];
-  let userProfile = null;
-  let leaveBalances = {};
-  let remainingReady = false;
-  let bootPayload = null;
-
   const $ = (id) => document.getElementById(id);
 
-  function showLoader(msg){ $("loaderText").textContent = msg || "Loading..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
+  let userProfile = null;
+  let bootPayload = null;
+  let approverOptions = [];
+  let filteredApprovers = [];
+  let selectedApproverUserId = "";
+
+  function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
 
   function doneAndExit(){
@@ -204,26 +94,42 @@
         return;
       }
     } catch(e) {}
-    try { window.close(); } catch(e) {}
+    goReturn_();
   }
 
-  function setSubmitEnabled_(enabled, hintText) {
-    const btn = $("submitBtn");
-    const hint = $("submitHint");
-    if (!btn) return;
-    btn.disabled = !enabled;
-    btn.classList.toggle("btn-disabled", !enabled);
+  function markSuccess_(){ try { sessionStorage.setItem(SUCCESS_KEY, "1"); } catch(e) {} }
+  function wasSuccess_(){ try { return sessionStorage.getItem(SUCCESS_KEY) === "1"; } catch(e) { return false; } }
+  function clearSuccess_(){ try { sessionStorage.removeItem(SUCCESS_KEY); } catch(e) {} }
 
-    if (!enabled) {
-      hint.textContent = hintText || "Please complete your registration before submitting leave.";
-      hint.classList.remove("hidden");
-    } else {
-      hint.classList.add("hidden");
+  function escapeHtml_(s) {
+    return String(s ?? "")
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function setHeader_(title, subtitle) {
+    $("title").textContent = title || "Welcome 👋";
+    $("subTitle").innerHTML = subtitle || "";
+  }
+
+  function setStatusBadge_(text) {
+    const b = $("statusBadge");
+    if (!text) {
+      b.classList.add("hidden");
+      return;
     }
+    b.textContent = text;
+    b.classList.remove("hidden");
   }
 
-  function hasApprover_(boot) {
-    return !!String(boot?.employee?.approverUserId || "").trim();
+  function getReturnUrl_() {
+    const params = new URLSearchParams(location.search);
+    const ret = params.get("return");
+    return ret ? decodeURIComponent(ret) : DEFAULT_RETURN;
+  }
+
+  function goReturn_() {
+    location.replace(getReturnUrl_());
   }
 
   function readBootCache_(userId){
@@ -231,13 +137,15 @@
       const raw = localStorage.getItem(BOOT_CACHE_KEY);
       if(!raw) return null;
       const obj = JSON.parse(raw);
-      if(!obj || obj.userId !== userId) return null;
+      if (!obj || obj.userId !== userId) return null;
 
       const ttl = obj.onboarded ? BOOT_TTL_OK_MS : BOOT_TTL_NOT_OK_MS;
-      if(Date.now() - (obj.ts||0) > ttl) return null;
+      if (Date.now() - (obj.ts || 0) > ttl) return null;
 
-      return obj.payload;
-    }catch(e){ return null; }
+      return obj.payload || null;
+    } catch(e){
+      return null;
+    }
   }
 
   function writeBootCache_(userId, payload){
@@ -248,98 +156,11 @@
         onboarded: !!payload?.onboarded,
         payload
       }));
-    }catch(e){}
+    } catch(e){}
   }
 
   async function apiBootstrap_(userId){
     const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
-    return res.json();
-  }
-
-  function redirectToLogin_() {
-    const ret = location.pathname + location.search;
-    location.replace(LOGIN_PAGE + "?return=" + encodeURIComponent(ret));
-  }
-
-  function showSystemError_(msg) {
-    $("bottomBar").classList.add("hidden");
-    $("formUI").innerHTML = `
-      <div class="card text-center py-10 mt-6">
-        <div class="text-4xl mb-3">⚠️</div>
-        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
-        <div class="text-sm text-[#9CA3AF] mt-2">${msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง"}</div>
-        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
-        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
-      </div>
-    `;
-  }
-
-  function updateSubmissionGateUI_(boot) {
-    const regBox = $("registrationNotice");
-    const appBox = $("approverNotice");
-
-    regBox.classList.add("hidden");
-    appBox.classList.add("hidden");
-
-    if (!boot?.employee?.userId) {
-      regBox.classList.remove("hidden");
-      setSubmitEnabled_(false, "Please complete your registration before submitting leave.");
-      return;
-    }
-
-    if (!hasApprover_(boot)) {
-      appBox.classList.remove("hidden");
-      setSubmitEnabled_(false, "Approver is required before you can submit this request.");
-      return;
-    }
-
-    setSubmitEnabled_(true);
-  }
-
-  function applyBootPayload_(boot) {
-    if (!boot || !boot.ok) return;
-
-    bootPayload = boot;
-
-    if (Array.isArray(boot.holidays)) companyHolidays = boot.holidays;
-
-    leaveBalances = {};
-    (boot.balances || []).forEach(b => {
-      if (!b || !b.type) return;
-      leaveBalances[String(b.type)] = isNaN(Number(b.remaining)) ? 0 : Number(b.remaining);
-    });
-
-    remainingReady = true;
-    updateRemainingUI();
-    validateOnFly();
-    updateSubmissionGateUI_(boot);
-  }
-
-  function selectType(btn, val) {
-    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    $('leaveTypeValue').value = val;
-
-    if (val === 'Other') $('otherField').classList.remove('hidden');
-    else { $('otherField').classList.add('hidden'); $('otherSpecify').value = ''; }
-
-    updateRemainingUI();
-    validateOnFly();
-  }
-
-  function selectDur(btn, val) {
-    document.querySelectorAll('.dur-btn').forEach(b => {
-      b.className = "dur-btn flex-1 py-2.5 text-sm font-medium text-[#64748B] hover:text-[#334155] transition-colors";
-      b.disabled = false;
-      b.classList.remove('opacity-40', 'cursor-not-allowed');
-    });
-    btn.className = "dur-btn flex-1 py-2.5 text-sm font-bold rounded-lg bg-white shadow-sm text-[#2563EB] ring-1 ring-black/5";
-    $('durationValue').value = val;
-    validateOnFly();
-  }
-
-  async function getRequest_(requestId) {
-    const res = await fetch(API_URL + "?action=get_request_compact&requestId=" + encodeURIComponent(requestId));
     return res.json();
   }
 
@@ -354,317 +175,340 @@
     return res.json();
   }
 
-  function updateRemainingUI() {
-    const type = $('leaveTypeValue').value;
-    const box = $('remainingBox');
-    const valEl = $('remainingValue');
-    if (!type) { box.classList.add('hidden'); return; }
+  function filterApproverOptions_(keyword) {
+    const q = String(keyword || "").trim().toLowerCase();
+    const list = approverOptions.filter(x => String(x.userId || "") !== String(userProfile?.userId || ""));
+    if (!q) return list;
 
-    const remaining = (leaveBalances[type] != null) ? leaveBalances[type] : null;
-    if (remaining == null) box.classList.add('hidden');
-    else {
-      valEl.textContent = `${remaining} ${remaining <= 1 ? "Day" : "Days"}`;
-      box.classList.remove('hidden');
-    }
+    return list.filter(x => {
+      const hay = [
+        x.label,
+        x.fullName,
+        x.nickname,
+        x.displayName
+      ].map(v => String(v || "").toLowerCase()).join(" | ");
+      return hay.indexOf(q) > -1;
+    });
   }
 
-  function calcWorkingDays(sStr, eStr) {
-    if (!sStr || !eStr) return 0;
-    const s = new Date(sStr);
-    const e = new Date(eStr);
-    if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
+  function renderApproverOptions_() {
+    const box = $("approverOptionsBox");
+    if (!box) return;
 
-    let total = 0;
-    const cur = new Date(s);
-    while (cur <= e) {
-      const dow = cur.getDay();
-      const isWeekend = (dow === 0 || dow === 6);
-
-      const yyyy = cur.getFullYear();
-      const mm = String(cur.getMonth() + 1).padStart(2, "0");
-      const dd = String(cur.getDate()).padStart(2, "0");
-      const dateStr = `${yyyy}-${mm}-${dd}`;
-
-      const isHoliday = Array.isArray(companyHolidays) && companyHolidays.includes(dateStr);
-      if (!isWeekend && !isHoliday) total++;
-      cur.setDate(cur.getDate() + 1);
-    }
-    return total;
-  }
-
-  function validateOnFly() {
-    const type = $('leaveTypeValue').value;
-    const s = $('startDate').value;
-    const e = $('endDate').value;
-    const badge = $('dayBadge');
-    const quotaError = $('quotaError');
-
-    $('startDate').classList.remove('err');
-    $('endDate').classList.remove('err');
-    quotaError.classList.add('hidden');
-
-    if (!s || !e) { badge.classList.add('hidden'); return true; }
-
-    let days = calcWorkingDays(s, e);
-
-    const durBtns = document.querySelectorAll('.dur-btn');
-    if (days > 1) {
-      if ($('durationValue').value !== 'Full Day') selectDur(durBtns[0], 'Full Day');
-      durBtns[1].disabled = true; durBtns[2].disabled = true;
-      durBtns[1].classList.add('opacity-40', 'cursor-not-allowed');
-      durBtns[2].classList.add('opacity-40', 'cursor-not-allowed');
-    } else {
-      durBtns[1].disabled = false; durBtns[2].disabled = false;
-      durBtns[1].classList.remove('opacity-40', 'cursor-not-allowed');
-      durBtns[2].classList.remove('opacity-40', 'cursor-not-allowed');
-    }
-
-    const dp = $('durationValue').value || "Full Day";
-    if ((dp === "Morning" || dp === "Afternoon") && days > 0) days -= 0.5;
-
-    badge.textContent = `Working: ${days} ${days <= 1 ? "Day" : "Days"}`;
-    badge.classList.remove('hidden');
-
-    const remaining = (type && leaveBalances[type] != null) ? leaveBalances[type] : null;
-    if (type && remaining != null && days > 0 && days > remaining) {
-      $('startDate').classList.add('err');
-      $('endDate').classList.add('err');
-      $('reqDaysDisplay').textContent = days;
-      $('remDaysDisplay').textContent = remaining;
-      quotaError.classList.remove('hidden');
-      return false;
-    }
-    return true;
-  }
-
-  function toDateInputValue_(v) {
-    if (!v) return "";
-    const s = String(v).trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    const iso = /^(\d{4}-\d{2}-\d{2})T/.exec(s);
-    if (iso) return iso[1];
-    const d = new Date(s);
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-    return "";
-  }
-
-  async function prefillIfEdit_() {
-    const params = new URLSearchParams(location.search);
-    const mode = params.get("mode");
-    const requestId = params.get("requestId");
-    if (mode !== "edit" || !requestId) return;
-
-    const data = await getRequest_(requestId);
-    if (!data || !data.ok || !data.request) return;
-
-    const r = data.request;
-    const st = String(r.status || "").toUpperCase();
-    if (st && st !== "DRAFT") {
-      alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
-      doneAndExit();
+    if (!filteredApprovers.length) {
+      box.innerHTML = `
+        <div class="text-sm text-[#9CA3AF] text-center py-6">
+          ไม่พบ Approver ที่ตรงกับคำค้นหา
+        </div>
+      `;
       return;
     }
 
-    const type = r.leaveType || "";
-    if (type) {
-      const btnMap = { Sick:0, Annual:1, Personal:2, Other:3 };
-      const idx = btnMap[type];
-      const btns = document.querySelectorAll(".type-btn");
-      if (btns && btns[idx]) selectType(btns[idx], type);
-    }
+    box.innerHTML = filteredApprovers.map(opt => {
+      const selected = String(opt.userId) === String(selectedApproverUserId);
+      return `
+        <button type="button"
+          class="option-btn ${selected ? "selected" : ""}"
+          onclick="selectApprover_('${escapeHtml_(opt.userId)}')">
+          <div class="text-sm font-bold text-[#1F2937]">${escapeHtml_(opt.label || "-")}</div>
+          <div class="text-[11px] text-[#9CA3AF] mt-1 font-mono">${escapeHtml_(opt.userId || "")}</div>
+        </button>
+      `;
+    }).join("");
+  }
 
-    $('otherSpecify').value = r.otherSpecify || "";
-    $('startDate').value = toDateInputValue_(r.startDate) || $('startDate').value;
-    $('endDate').value = toDateInputValue_(r.endDate) || $('endDate').value;
+  function selectApprover_(userId) {
+    selectedApproverUserId = String(userId || "");
+    const picked = approverOptions.find(x => String(x.userId) === selectedApproverUserId);
 
-    const dp = r.dayPart || "Full Day";
-    const durBtns = document.querySelectorAll(".dur-btn");
-    if (dp === "Morning") selectDur(durBtns[1], "Morning");
-    else if (dp === "Afternoon") selectDur(durBtns[2], "Afternoon");
-    else selectDur(durBtns[0], "Full Day");
+    $("approverUserId").value = selectedApproverUserId;
+    $("approverSearch").value = picked ? String(picked.label || "") : "";
+    $("approverErr")?.classList.add("hidden");
+    $("approverSearch")?.classList.remove("err");
 
-    $('reason').value = r.reason || "";
-    validateOnFly();
+    filteredApprovers = filterApproverOptions_($("approverSearch").value);
+    renderApproverOptions_();
+  }
+
+  function onApproverSearchInput_() {
+    selectedApproverUserId = "";
+    $("approverUserId").value = "";
+    $("approverErr")?.classList.add("hidden");
+    $("approverSearch")?.classList.remove("err");
+
+    filteredApprovers = filterApproverOptions_($("approverSearch").value);
+    renderApproverOptions_();
+  }
+
+  function clearNameErr_() {
+    $("nameErr")?.classList.add("hidden");
+    $("fullName")?.classList.remove("err");
+  }
+
+  function showNameErr_() {
+    $("nameErr")?.classList.remove("hidden");
+    $("fullName")?.classList.add("err");
+    $("fullName")?.addEventListener("input", clearNameErr_, { once: true });
+  }
+
+  function clearApproverErr_() {
+    $("approverErr")?.classList.add("hidden");
+    $("approverSearch")?.classList.remove("err");
+  }
+
+  function showApproverErr_() {
+    $("approverErr")?.classList.remove("hidden");
+    $("approverSearch")?.classList.add("err");
+    $("approverSearch")?.addEventListener("input", clearApproverErr_, { once: true });
+  }
+
+  function renderForm_(boot) {
+    const emp = boot?.employee || {};
+    const isFirstUser = !!boot?.isFirstUser;
+    const hasExisting = !!(emp && emp.userId);
+
+    setHeader_(
+      "Welcome 👋",
+      `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`
+    );
+    setStatusBadge_(isFirstUser ? "First user" : (hasExisting ? "Update" : "Register"));
+
+    approverOptions = Array.isArray(boot?.approverOptions) ? boot.approverOptions : [];
+    filteredApprovers = filterApproverOptions_("");
+    selectedApproverUserId = String(emp?.approverUserId || "");
+
+    const selectedLabel = approverOptions.find(x => String(x.userId) === selectedApproverUserId)?.label || "";
+
+    $("rootBox").innerHTML = `
+      <div class="card space-y-4">
+        <div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
+          <input id="fullName" type="text" class="input" placeholder="Please enter your full name" value="${escapeHtml_(emp?.fullName || "")}" />
+          <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
+          <input id="nickname" type="text" class="input" placeholder="Please enter your nickname" value="${escapeHtml_(emp?.nickname || "")}" />
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div class="flex justify-between items-center px-1 h-7">
+          <label class="text-sm font-bold text-[#1F2937]">
+            Approver ${isFirstUser ? "" : '<span class="text-[#EF4444]">*</span>'}
+          </label>
+        </div>
+
+        <div class="card space-y-3">
+          <input type="hidden" id="approverUserId" value="${escapeHtml_(selectedApproverUserId)}" />
+
+          <div>
+            <input
+              id="approverSearch"
+              type="text"
+              class="input"
+              placeholder="${isFirstUser ? 'Search approver (optional for first user)' : 'Search approver by name or nickname'}"
+              value="${escapeHtml_(selectedLabel)}"
+              oninput="onApproverSearchInput_()"
+            />
+            <div id="approverErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณาเลือก Approver ก่อนลงทะเบียน</div>
+          </div>
+
+          <div id="approverOptionsBox" class="dropdown-box space-y-2"></div>
+        </div>
+
+        ${
+          isFirstUser
+          ? `
+            <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+              <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
+              <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+                You are the first active user in this system, so you can complete registration without selecting an approver.
+              </div>
+            </div>
+          `
+          : `
+            <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+              <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
+              <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+                Please select your approver to complete onboarding.
+              </div>
+            </div>
+          `
+        }
+      </div>
+    `;
+
+    renderApproverOptions_();
+    $("bottomBar").classList.remove("hidden");
+    $("submitBtn").textContent = "ลงทะเบียน";
+    $("submitBtn").disabled = false;
+  }
+
+  function renderSystemError_(msg) {
+    setHeader_("Something went wrong", "Please try again");
+    setStatusBadge_("");
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">⚠️</div>
+        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
+        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
+      </div>
+    `;
+    $("bottomBar").classList.add("hidden");
   }
 
   async function handleSubmit() {
-    if (!bootPayload?.employee?.userId) {
-      alert("Please complete your registration before submitting leave.");
-      redirectToLogin_();
-      return;
-    }
-
-    if (!hasApprover_(bootPayload)) {
-      alert("Approver is required before you can submit this request.");
-      redirectToLogin_();
-      return;
-    }
-
-    if (!remainingReady) return alert("กำลังโหลดข้อมูลการใช้งาน กรุณารอสักครู่ค่ะ");
-
-    const type = $('leaveTypeValue').value;
-    const startDate = $('startDate').value;
-    const endDate = $('endDate').value;
-    const reason = $('reason').value.trim();
-    const otherSpec = $('otherSpecify').value.trim();
-
-    if (!type) return alert("กรุณาเลือกประเภทการลา");
-    if (type === 'Other' && !otherSpec) return alert("กรุณาระบุประเภทการลา");
-    if (!startDate || !endDate) return alert("กรุณาเลือกวันที่");
-    if (!reason) return alert("กรุณาระบุเหตุผล");
-    if (!validateOnFly()) return alert("วันลาเกินโควตาที่กำหนด");
-
-    const params = new URLSearchParams(location.search);
-    const mode = params.get("mode");
-    const requestId = (mode === "edit") ? (params.get("requestId") || "") : "";
-
     try {
-      showLoader("Saving...");
-      $('submitBtn').disabled = true;
+      const fullName = ($("fullName")?.value || "").trim();
+      const nickname = ($("nickname")?.value || "").trim();
+      const approverUserId = ($("approverUserId")?.value || "").trim();
 
-      const data = await postFormUrlEncoded_({
-        action: "upsert_draft",
-        requestId,
-        userId: userProfile.userId,
-        name: userProfile.displayName,
-        leaveType: type,
-        otherSpecify: otherSpec,
-        startDate,
-        endDate,
-        dayPart: $('durationValue').value || "Full Day",
-        reason
-      });
-
-      if (!data || !data.ok || !data.requestId) {
-        const errCode = String(data?.error || "unknown_error");
-
-        hideLoader();
-        $('submitBtn').disabled = false;
-
-        if (errCode === "employee_not_found" || errCode === "registration_incomplete") {
-          alert("Please complete your registration before submitting leave.");
-          redirectToLogin_();
-          return;
-        }
-
-        if (errCode === "approver_required_for_submission") {
-          alert("Approver is required before you can submit this request.");
-          redirectToLogin_();
-          return;
-        }
-
-        if (errCode === "exceed_remaining") {
-          alert("วันลาเกินโควตาที่กำหนด");
-          return;
-        }
-
-        throw new Error(errCode);
+      if (!fullName) {
+        showNameErr_();
+        return;
       }
 
+      if (!bootPayload?.isFirstUser && !approverUserId) {
+        showApproverErr_();
+        return;
+      }
+
+      showLoader("Registering...");
+      $("submitBtn").disabled = true;
+
+      const data = await postFormUrlEncoded_({
+        action: "register_user",
+        userId: userProfile.userId,
+        displayName: userProfile.displayName || "",
+        fullName,
+        nickname,
+        approverUserId
+      });
+
+      if (!data || !data.ok) {
+        hideLoader();
+        $("submitBtn").disabled = false;
+        alert("❌ Save failed: " + String(data?.error || "unknown_error"));
+        return;
+      }
+
+      writeBootCache_(userProfile.userId, {
+        ok: true,
+        onboarded: !!data.onboarded,
+        isFirstUser: !!data.isFirstUser,
+        employee: data.employee || null,
+        approverOptions: data.approverOptions || []
+      });
+
       hideLoader();
-      $('bottomBar').classList.add('hidden');
-      $('formUI').innerHTML = `
-        <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
+      markSuccess_();
+      $("bottomBar").classList.add("hidden");
+
+      $("rootBox").innerHTML = `
+        <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
-          <div class="text-xl font-bold text-[#1F2937]">Draft saved.</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">ยืนยันรายการต่อในแชท</div>
+          <div class="text-xl font-bold text-[#1F2937]">You’re all set!</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">Registration complete.</div>
         </div>
       `;
 
-      try { await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]); } catch(e) {}
-      setTimeout(() => doneAndExit(), 900);
+      setTimeout(() => doneAndExit(), 700);
 
     } catch (e) {
       hideLoader();
-      $('submitBtn').disabled = false;
-      alert("❌ Submit failed: " + (e?.message || e));
+      $("submitBtn").disabled = false;
+      alert("❌ Save failed: " + (e?.message || e));
     }
   }
 
   async function init() {
-    setSubmitEnabled_(false, "กำลังโหลดข้อมูลการใช้งาน…");
     showLoader("Loading...");
-
     await liff.init({ liffId: LIFF_ID });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
 
-    const params = new URLSearchParams(location.search);
-    const mode = params.get("mode");
-    const requestId = params.get("requestId");
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
 
-    if ((mode === "reject" || mode === "view_remark") && requestId) {
-      const qs = new URLSearchParams({ mode, requestId }).toString();
-      location.replace(REMARK_PAGE + "?" + qs);
+    if (wasSuccess_()) {
+      $("bottomBar").classList.add("hidden");
+      $("rootBox").innerHTML = `
+        <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
+          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4">✅</div>
+          <div class="text-xl font-bold text-[#1F2937]">You’re all set!</div>
+          <div class="text-sm text-[#9CA3AF] mt-2">Registration complete.</div>
+        </div>
+      `;
+      clearSuccess_();
+      hideLoader();
+      setTimeout(() => doneAndExit(), 500);
       return;
     }
 
     userProfile = await liff.getProfile();
-    $('userGreet').innerHTML = `Hi, <span class="font-bold text-[#1F2937]">${userProfile.displayName}</span>`;
+
     if (userProfile.pictureUrl) {
-      $('profileImg').src = userProfile.pictureUrl;
-      $('avatarBox').classList.remove('hidden');
+      $("profileImg").src = userProfile.pictureUrl;
+      $("avatarBox").classList.remove("hidden");
     }
 
-    const isEdit = (mode === "edit" && !!requestId);
-    let didPrefill = false;
+    const cached = readBootCache_(userProfile.userId);
+    if (cached && cached.ok) {
+      bootPayload = cached;
 
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
-    const todayStr = `${yyyy}-${mm}-${dd}`;
-
-    $('startDate').setAttribute("min", todayStr);
-    $('endDate').setAttribute("min", todayStr);
-    if (!isEdit) { $('startDate').value = todayStr; $('endDate').value = todayStr; }
-
-    const cachedBoot = readBootCache_(userProfile.userId);
-    if (cachedBoot && cachedBoot.ok) {
-      bootPayload = cachedBoot;
-      applyBootPayload_(bootPayload);
-
-      if (isEdit) {
-        try { await prefillIfEdit_(); didPrefill = true; } catch(e) {}
+      if (bootPayload.onboarded) {
+        hideLoader();
+        goReturn_();
+        return;
       }
+
+      renderForm_(bootPayload);
       hideLoader();
     }
 
     let boot = null;
-    try { boot = await apiBootstrap_(userProfile.userId); }
-    catch (e) {
-      if (!cachedBoot) {
+    try {
+      showLoader("Checking access...");
+      boot = await apiBootstrap_(userProfile.userId);
+    } catch (e) {
+      if (!cached) {
         hideLoader();
-        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+        renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
       }
       return;
     }
 
     if (!boot || !boot.ok) {
-      if (!cachedBoot) {
-        hideLoader();
-        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
-      }
+      hideLoader();
+      renderSystemError_(boot?.error || "bootstrap_failed");
       return;
     }
 
     bootPayload = boot;
     writeBootCache_(userProfile.userId, bootPayload);
-    applyBootPayload_(bootPayload);
 
-    if (isEdit && !didPrefill) {
-      try { await prefillIfEdit_(); } catch(e) {}
+    if (bootPayload.onboarded) {
+      hideLoader();
+      goReturn_();
+      return;
     }
 
-    validateOnFly();
+    renderForm_(bootPayload);
     hideLoader();
   }
 
   init().catch(err => {
     console.error(err);
     hideLoader();
-    showSystemError_("LIFF Init Error: " + (err.message || err));
+    renderSystemError_("LIFF Init Error: " + (err?.message || err));
   });
 </script>
 </body>
 </html>
+
+
 
