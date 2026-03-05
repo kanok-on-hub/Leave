@@ -144,7 +144,7 @@
         class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all">
         บันทึกร่าง
       </button>
-      <div id="submitHint" class="subhint hidden">กำลังโหลดสิทธิ์คงเหลือ…</div>
+      <div id="submitHint" class="subhint hidden">กำลังโหลดข้อมูลการใช้งาน…</div>
     </div>
 
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
@@ -163,21 +163,32 @@
   const LOGIN_PAGE = "login.html";
   const REMARK_PAGE = "remark.html";
 
-  const BOOT_CACHE_KEY = "leave_boot_v1";
-  const BOOT_TTL_MS = 3 * 60 * 1000;
-
-  const ROLE_CACHE_KEY = "leave_onboard_v1";
+  const BOOT_CACHE_KEY = "leave_boot_v2";
+  const BOOT_TTL_OK_MS = 3 * 60 * 1000;
+  const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
   let companyHolidays = [];
   let userProfile = null;
   let leaveBalances = {};
   let remainingReady = false;
+  let bootPayload = null;
 
   const $ = (id) => document.getElementById(id);
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Loading..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
-  function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
+
+  function doneAndExit(){
+    try {
+      if (window.liff && liff.isInClient()) {
+        liff.closeWindow();
+        return;
+      }
+    } catch(e) {}
+    try {
+      window.close();
+    } catch(e) {}
+  }
 
   function setSubmitEnabled_(enabled, hintText) {
     const btn = $("submitBtn");
@@ -187,15 +198,11 @@
     btn.classList.toggle("btn-disabled", !enabled);
 
     if (!enabled) {
-      hint.textContent = hintText || "กำลังโหลดสิทธิ์คงเหลือ…";
+      hint.textContent = hintText || "กำลังโหลดข้อมูลการใช้งาน…";
       hint.classList.remove("hidden");
     } else {
       hint.classList.add("hidden");
     }
-  }
-
-  function writeRoleCache_(payload) {
-    try { localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify(payload || {})); } catch(e) {}
   }
 
   function readBootCache_(userId){
@@ -204,18 +211,27 @@
       if(!raw) return null;
       const obj = JSON.parse(raw);
       if(!obj || obj.userId !== userId) return null;
-      if(Date.now() - (obj.ts||0) > BOOT_TTL_MS) return null;
+
+      const ttl = obj.onboarded ? BOOT_TTL_OK_MS : BOOT_TTL_NOT_OK_MS;
+      if(Date.now() - (obj.ts||0) > ttl) return null;
+
       return obj.payload;
     }catch(e){ return null; }
   }
+
   function writeBootCache_(userId, payload){
     try{
-      localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({ userId, ts: Date.now(), payload }));
+      localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({
+        userId,
+        ts: Date.now(),
+        onboarded: !!payload?.onboarded,
+        payload
+      }));
     }catch(e){}
   }
 
   async function apiBootstrap_(userId){
-    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId));
+    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
     return res.json();
   }
 
@@ -249,15 +265,10 @@
     `;
   }
 
-  function canRequesterFromBoot_(boot) {
-    if (!boot) return false;
-    if (typeof boot.canRequester === "boolean") return boot.canRequester;
-    const role = String(boot.role || "");
-    return role.toLowerCase() === "requester";
-  }
-
   function applyBootPayload_(boot) {
     if (!boot || !boot.ok) return;
+
+    bootPayload = boot;
 
     if (Array.isArray(boot.holidays)) companyHolidays = boot.holidays;
 
@@ -337,7 +348,12 @@
     while (cur <= e) {
       const dow = cur.getDay();
       const isWeekend = (dow === 0 || dow === 6);
-      const dateStr = cur.toISOString().split('T')[0];
+
+      const yyyy = cur.getFullYear();
+      const mm = String(cur.getMonth() + 1).padStart(2, "0");
+      const dd = String(cur.getDate()).padStart(2, "0");
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
       const isHoliday = Array.isArray(companyHolidays) && companyHolidays.includes(dateStr);
       if (!isWeekend && !isHoliday) total++;
       cur.setDate(cur.getDate() + 1);
@@ -441,7 +457,7 @@
   }
 
   async function handleSubmit() {
-    if (!remainingReady) return alert("กำลังโหลดสิทธิ์คงเหลือ กรุณารอสักครู่ค่ะ");
+    if (!remainingReady) return alert("กำลังโหลดข้อมูลการใช้งาน กรุณารอสักครู่ค่ะ");
 
     const type = $('leaveTypeValue').value;
     const startDate = $('startDate').value;
@@ -476,7 +492,25 @@
         reason
       });
 
-      if (!data || !data.ok || !data.requestId) throw new Error(data?.error || "ระบบขัดข้อง");
+      if (!data || !data.ok || !data.requestId) {
+        const errCode = String(data?.error || "unknown_error");
+
+        hideLoader();
+        $('submitBtn').disabled = false;
+
+        if (errCode === "onboarding_incomplete" || errCode === "not_onboarded") {
+          alert("กรุณา Setup ข้อมูลการใช้งานให้ครบก่อน");
+          redirectToLogin_();
+          return;
+        }
+
+        if (errCode === "exceed_remaining") {
+          alert("วันลาเกินโควตาที่กำหนด");
+          return;
+        }
+
+        throw new Error(errCode);
+      }
 
       hideLoader();
       $('bottomBar').classList.add('hidden');
@@ -499,7 +533,7 @@
   }
 
   async function init() {
-    setSubmitEnabled_(false, "กำลังโหลดสิทธิ์คงเหลือ…");
+    setSubmitEnabled_(false, "กำลังโหลดข้อมูลการใช้งาน…");
     showLoader("Loading...");
 
     await liff.init({ liffId: LIFF_ID });
@@ -523,81 +557,66 @@
     }
 
     const isEdit = (mode === "edit" && !!requestId);
-
-    // ✅ NEW: prevent double prefill
     let didPrefill = false;
 
-    const today = new Date().toISOString().split('T')[0];
-    $('startDate').setAttribute("min", today);
-    $('endDate').setAttribute("min", today);
-    if (!isEdit) { $('startDate').value = today; $('endDate').value = today; }
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    const todayStr = `${yyyy}-${mm}-${dd}`;
 
-    // ✅ CHANGED: if edit, keep loader until prefill finishes (even when cached boot exists)
+    $('startDate').setAttribute("min", todayStr);
+    $('endDate').setAttribute("min", todayStr);
+    if (!isEdit) { $('startDate').value = todayStr; $('endDate').value = todayStr; }
+
     const cachedBoot = readBootCache_(userProfile.userId);
-    if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded && canRequesterFromBoot_(cachedBoot)) {
-      applyBootPayload_(cachedBoot);
+    if (cachedBoot && cachedBoot.ok) {
+      bootPayload = cachedBoot;
 
-      if (isEdit) {
-        try { await prefillIfEdit_(); didPrefill = true; } catch(e) {}
+      if (bootPayload.onboarded) {
+        applyBootPayload_(bootPayload);
+
+        if (isEdit) {
+          try { await prefillIfEdit_(); didPrefill = true; } catch(e) {}
+        }
+
+        hideLoader();
+      } else {
+        hideLoader();
+        redirectToLogin_();
+        return;
       }
-
-      hideLoader();
     }
 
     let boot = null;
     try { boot = await apiBootstrap_(userProfile.userId); }
     catch (e) {
-      if (!cachedBoot) { hideLoader(); showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง"); }
+      if (!cachedBoot) {
+        hideLoader();
+        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+      }
       return;
     }
 
     if (!boot || !boot.ok) {
-      if (!cachedBoot) { hideLoader(); showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง"); }
+      if (!cachedBoot) {
+        hideLoader();
+        showSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+      }
       return;
     }
 
-    writeBootCache_(userProfile.userId, boot);
+    bootPayload = boot;
+    writeBootCache_(userProfile.userId, bootPayload);
 
-    if (!boot.onboarded) {
-      writeRoleCache_({ userId: userProfile.userId, onboarded:false, ts: Date.now() });
+    if (!bootPayload.onboarded) {
       hideLoader();
       redirectToLogin_();
       return;
     }
 
-    if (!canRequesterFromBoot_(boot)) {
-      const rolesText = (Array.isArray(boot.roles) && boot.roles.length) ? boot.roles.join(", ") : String(boot.role || "Approver");
-      writeRoleCache_({
-        userId: userProfile.userId,
-        onboarded:true,
-        role: String(boot.role || ""),
-        roles: boot.roles || [],
-        canRequester: !!boot.canRequester,
-        canApprover: !!boot.canApprover,
-        name: String(boot.name||""),
-        nickname: String(boot.nickname||""),
-        ts: Date.now()
-      });
-      hideLoader();
-      showAccessDenied_("บัญชีของคุณไม่มีสิทธิ์ Requester (Role: " + rolesText + ")");
-      return;
-    }
+    applyBootPayload_(bootPayload);
 
-    writeRoleCache_({
-      userId: userProfile.userId,
-      onboarded:true,
-      role: String(boot.role || "Requester"),
-      roles: boot.roles || [],
-      canRequester: (typeof boot.canRequester === "boolean") ? boot.canRequester : true,
-      canApprover: !!boot.canApprover,
-      name: String(boot.name||""),
-      nickname: String(boot.nickname||""),
-      ts: Date.now()
-    });
-
-    applyBootPayload_(boot);
-
-    // ✅ CHANGED: avoid double prefill
     if (isEdit && !didPrefill) {
       try { await prefillIfEdit_(); } catch(e) {}
     }
@@ -614,7 +633,3 @@
 </script>
 </body>
 </html>
-
-
-
-
