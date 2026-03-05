@@ -19,13 +19,28 @@
 
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
 
-    .option-btn { width:100%; text-align:left; padding:.85rem 1rem; border:1px solid transparent; border-radius:1rem; background:#F9FAFB; color:#374151; transition:.2s; }
-    .option-btn:active { transform: scale(.98); }
-    .option-btn:hover { background:#F3F4F6; }
-    .option-btn.selected { border-color:#3B82F6; background:#EFF6FF; box-shadow:0 4px 12px rgba(59,130,246,.12); }
-
-    .dropdown-box { max-height: 280px; overflow:auto; }
+    .btn-disabled { opacity: .55; cursor: not-allowed; }
     ::-webkit-scrollbar { display: none; }
+
+    /* Searchable dropdown (minimal, matches current style) */
+    .dd-wrap { position: relative; }
+    .dd-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+      z-index: 50;
+    }
+    .dd-item { padding: 12px 14px; cursor: pointer; }
+    .dd-item:hover { background: #F9FAFB; }
+    .dd-item.disabled { opacity: .45; cursor: not-allowed; }
+    .dd-item.disabled:hover { background: #fff; }
+    .dd-empty { padding: 14px; color:#9CA3AF; font-size: 12px; text-align:center; }
   </style>
 </head>
 
@@ -43,7 +58,7 @@
             <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Loading...
           </p>
         </div>
-        <span id="statusBadge" class="hidden info-badge">-</span>
+        <span id="statusBadge" class="hidden info-badge">Status</span>
       </div>
     </div>
 
@@ -52,7 +67,7 @@
     <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F3F4F6] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
       <button id="submitBtn" onclick="handleSubmit()"
         class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all">
-        ลงทะเบียน
+        Save
       </button>
     </div>
 
@@ -67,21 +82,17 @@
 <script>
   const LIFF_ID  = "2008997153-n5oIYKUP";
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
-
   const DEFAULT_RETURN = "index.html";
 
   const BOOT_CACHE_KEY = "leave_boot_v2";
-  const SUCCESS_KEY = "leave_login_success_v2";
-
   const BOOT_TTL_OK_MS = 3 * 60 * 1000;
   const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
   const $ = (id) => document.getElementById(id);
 
   let userProfile = null;
-  let bootPayload = null;
+  let boot = null;
   let approverOptions = [];
-  let filteredApprovers = [];
   let selectedApproverUserId = "";
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
@@ -89,17 +100,10 @@
 
   function doneAndExit(){
     try {
-      if (window.liff && liff.isInClient()) {
-        liff.closeWindow();
-        return;
-      }
+      if (window.liff && liff.isInClient()) { liff.closeWindow(); return; }
     } catch(e) {}
-    goReturn_();
+    try { window.close(); } catch(e) {}
   }
-
-  function markSuccess_(){ try { sessionStorage.setItem(SUCCESS_KEY, "1"); } catch(e) {} }
-  function wasSuccess_(){ try { return sessionStorage.getItem(SUCCESS_KEY) === "1"; } catch(e) { return false; } }
-  function clearSuccess_(){ try { sessionStorage.removeItem(SUCCESS_KEY); } catch(e) {} }
 
   function escapeHtml_(s) {
     return String(s ?? "")
@@ -114,10 +118,7 @@
 
   function setStatusBadge_(text) {
     const b = $("statusBadge");
-    if (!text) {
-      b.classList.add("hidden");
-      return;
-    }
+    if (!text) { b.classList.add("hidden"); return; }
     b.textContent = text;
     b.classList.remove("hidden");
   }
@@ -137,15 +138,13 @@
       const raw = localStorage.getItem(BOOT_CACHE_KEY);
       if(!raw) return null;
       const obj = JSON.parse(raw);
-      if (!obj || obj.userId !== userId) return null;
+      if(!obj || obj.userId !== userId) return null;
 
       const ttl = obj.onboarded ? BOOT_TTL_OK_MS : BOOT_TTL_NOT_OK_MS;
-      if (Date.now() - (obj.ts || 0) > ttl) return null;
+      if(Date.now() - (obj.ts||0) > ttl) return null;
 
-      return obj.payload || null;
-    } catch(e){
-      return null;
-    }
+      return obj.payload;
+    }catch(e){ return null; }
   }
 
   function writeBootCache_(userId, payload){
@@ -156,7 +155,7 @@
         onboarded: !!payload?.onboarded,
         payload
       }));
-    } catch(e){}
+    }catch(e){}
   }
 
   async function apiBootstrap_(userId){
@@ -175,179 +174,72 @@
     return res.json();
   }
 
-  function filterApproverOptions_(keyword) {
-    const q = String(keyword || "").trim().toLowerCase();
-    const list = approverOptions.filter(x => String(x.userId || "") !== String(userProfile?.userId || ""));
-    if (!q) return list;
+  function buildOptionLabel_(x) {
+    if (!x) return "-";
+    const fn = String(x.fullName || "").trim();
+    const nn = String(x.nickname || "").trim();
+    const dn = String(x.displayName || "").trim();
 
-    return list.filter(x => {
-      const hay = [
-        x.label,
-        x.fullName,
-        x.nickname,
-        x.displayName
-      ].map(v => String(v || "").toLowerCase()).join(" | ");
-      return hay.indexOf(q) > -1;
-    });
+    if (fn && nn) return `${fn} (${nn})`;
+    if (fn) return fn;
+    if (nn) return nn;
+    return dn || "-";
   }
 
-  function renderApproverOptions_() {
-    const box = $("approverOptionsBox");
-    if (!box) return;
+  function normalizeStr_(s) {
+    return String(s || "").toLowerCase().trim();
+  }
 
-    if (!filteredApprovers.length) {
-      box.innerHTML = `
-        <div class="text-sm text-[#9CA3AF] text-center py-6">
-          ไม่พบ Approver ที่ตรงกับคำค้นหา
-        </div>
-      `;
-      return;
+  function matchesQuery_(opt, q) {
+    const qq = normalizeStr_(q);
+    if (!qq) return true;
+
+    const a = normalizeStr_(opt.fullName);
+    const b = normalizeStr_(opt.nickname);
+    const c = normalizeStr_(opt.displayName);
+    const d = normalizeStr_(opt.label);
+
+    return a.includes(qq) || b.includes(qq) || c.includes(qq) || d.includes(qq);
+  }
+
+  function isFirstUser_() {
+    return !!boot?.isFirstUser;
+  }
+
+  function existingEmployee_() {
+    return boot?.employee && String(boot.employee.userId || "").trim() ? boot.employee : null;
+  }
+
+  function existingApproverUserId_() {
+    return String(boot?.employee?.approverUserId || "").trim();
+  }
+
+  function setBtnDisabled_(disabled) {
+    const btn = $("submitBtn");
+    btn.disabled = !!disabled;
+    btn.classList.toggle("btn-disabled", !!disabled);
+  }
+
+  function clearErr_(id, inputId) {
+    const el = $(id);
+    const inp = $(inputId);
+    if (el) el.classList.add("hidden");
+    if (inp) inp.classList.remove("err");
+  }
+
+  function showErr_(id, inputId, msg) {
+    const el = $(id);
+    const inp = $(inputId);
+    if (el) { el.textContent = msg; el.classList.remove("hidden"); }
+    if (inp) inp.classList.add("err");
+    if (inp) {
+      const once = function(){ clearErr_(id, inputId); inp.removeEventListener("input", once); };
+      inp.addEventListener("input", once);
     }
-
-    box.innerHTML = filteredApprovers.map(opt => {
-      const selected = String(opt.userId) === String(selectedApproverUserId);
-      return `
-        <button type="button"
-          class="option-btn ${selected ? "selected" : ""}"
-          onclick="selectApprover_('${escapeHtml_(opt.userId)}')">
-          <div class="text-sm font-bold text-[#1F2937]">${escapeHtml_(opt.label || "-")}</div>
-          <div class="text-[11px] text-[#9CA3AF] mt-1 font-mono">${escapeHtml_(opt.userId || "")}</div>
-        </button>
-      `;
-    }).join("");
-  }
-
-  function selectApprover_(userId) {
-    selectedApproverUserId = String(userId || "");
-    const picked = approverOptions.find(x => String(x.userId) === selectedApproverUserId);
-
-    $("approverUserId").value = selectedApproverUserId;
-    $("approverSearch").value = picked ? String(picked.label || "") : "";
-    $("approverErr")?.classList.add("hidden");
-    $("approverSearch")?.classList.remove("err");
-
-    filteredApprovers = filterApproverOptions_($("approverSearch").value);
-    renderApproverOptions_();
-  }
-
-  function onApproverSearchInput_() {
-    selectedApproverUserId = "";
-    $("approverUserId").value = "";
-    $("approverErr")?.classList.add("hidden");
-    $("approverSearch")?.classList.remove("err");
-
-    filteredApprovers = filterApproverOptions_($("approverSearch").value);
-    renderApproverOptions_();
-  }
-
-  function clearNameErr_() {
-    $("nameErr")?.classList.add("hidden");
-    $("fullName")?.classList.remove("err");
-  }
-
-  function showNameErr_() {
-    $("nameErr")?.classList.remove("hidden");
-    $("fullName")?.classList.add("err");
-    $("fullName")?.addEventListener("input", clearNameErr_, { once: true });
-  }
-
-  function clearApproverErr_() {
-    $("approverErr")?.classList.add("hidden");
-    $("approverSearch")?.classList.remove("err");
-  }
-
-  function showApproverErr_() {
-    $("approverErr")?.classList.remove("hidden");
-    $("approverSearch")?.classList.add("err");
-    $("approverSearch")?.addEventListener("input", clearApproverErr_, { once: true });
-  }
-
-  function renderForm_(boot) {
-    const emp = boot?.employee || {};
-    const isFirstUser = !!boot?.isFirstUser;
-    const hasExisting = !!(emp && emp.userId);
-
-    setHeader_(
-      "Welcome 👋",
-      `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`
-    );
-    setStatusBadge_(isFirstUser ? "First user" : (hasExisting ? "Update" : "Register"));
-
-    approverOptions = Array.isArray(boot?.approverOptions) ? boot.approverOptions : [];
-    filteredApprovers = filterApproverOptions_("");
-    selectedApproverUserId = String(emp?.approverUserId || "");
-
-    const selectedLabel = approverOptions.find(x => String(x.userId) === selectedApproverUserId)?.label || "";
-
-    $("rootBox").innerHTML = `
-      <div class="card space-y-4">
-        <div>
-          <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
-          <input id="fullName" type="text" class="input" placeholder="Please enter your full name" value="${escapeHtml_(emp?.fullName || "")}" />
-          <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณากรอกชื่อ-นามสกุล</div>
-        </div>
-
-        <div>
-          <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
-          <input id="nickname" type="text" class="input" placeholder="Please enter your nickname" value="${escapeHtml_(emp?.nickname || "")}" />
-        </div>
-      </div>
-
-      <div class="space-y-3">
-        <div class="flex justify-between items-center px-1 h-7">
-          <label class="text-sm font-bold text-[#1F2937]">
-            Approver ${isFirstUser ? "" : '<span class="text-[#EF4444]">*</span>'}
-          </label>
-        </div>
-
-        <div class="card space-y-3">
-          <input type="hidden" id="approverUserId" value="${escapeHtml_(selectedApproverUserId)}" />
-
-          <div>
-            <input
-              id="approverSearch"
-              type="text"
-              class="input"
-              placeholder="${isFirstUser ? 'Search approver (optional for first user)' : 'Search approver by name or nickname'}"
-              value="${escapeHtml_(selectedLabel)}"
-              oninput="onApproverSearchInput_()"
-            />
-            <div id="approverErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold">กรุณาเลือก Approver ก่อนลงทะเบียน</div>
-          </div>
-
-          <div id="approverOptionsBox" class="dropdown-box space-y-2"></div>
-        </div>
-
-        ${
-          isFirstUser
-          ? `
-            <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
-              <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
-              <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-                You are the first active user in this system, so you can complete registration without selecting an approver.
-              </div>
-            </div>
-          `
-          : `
-            <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
-              <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
-              <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
-                Please select your approver to complete onboarding.
-              </div>
-            </div>
-          `
-        }
-      </div>
-    `;
-
-    renderApproverOptions_();
-    $("bottomBar").classList.remove("hidden");
-    $("submitBtn").textContent = "ลงทะเบียน";
-    $("submitBtn").disabled = false;
   }
 
   function renderSystemError_(msg) {
-    setHeader_("Something went wrong", "Please try again");
+    setHeader_("System Error", "Please try again");
     setStatusBadge_("");
     $("rootBox").innerHTML = `
       <div class="card text-center py-10">
@@ -361,24 +253,186 @@
     $("bottomBar").classList.add("hidden");
   }
 
+  function renderForm_() {
+    const emp = existingEmployee_();
+    const existingApprover = existingApproverUserId_();
+
+    selectedApproverUserId = existingApprover; // prefill if exists
+
+    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`);
+
+    // status badge
+    if (!emp) setStatusBadge_("New");
+    else setStatusBadge_(existingApprover ? "Active" : (isFirstUser_() ? "First user" : "Incomplete"));
+
+    const hint = isFirstUser_()
+      ? `You can register without an approver to initialize the system. <span class="font-bold">You will not be able to submit leave until an approver is set.</span>`
+      : `Please choose your approver to complete registration.`;
+
+    $("rootBox").innerHTML = `
+      <div class="card space-y-4">
+        <div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
+          <input id="fullName" type="text" class="input" placeholder="Please enter your full name" value="${escapeHtml_(emp?.fullName || "")}" />
+          <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold"></div>
+        </div>
+
+        <div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
+          <input id="nickname" type="text" class="input" placeholder="Please enter your nickname" value="${escapeHtml_(emp?.nickname || "")}" />
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <div class="flex justify-between items-center px-1 h-7">
+          <label class="text-sm font-bold text-[#1F2937]">Approver ${isFirstUser_() ? "" : `<span class="text-[#EF4444]">*</span>`}</label>
+        </div>
+
+        <div class="dd-wrap">
+          <input id="approverSearch" type="text" class="input" placeholder="Search approver name..." autocomplete="off" />
+          <input id="approverUserId" type="hidden" value="${escapeHtml_(selectedApproverUserId)}" />
+
+          <div id="ddPanel" class="dd-panel hidden"></div>
+          <div id="approverErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1"></div>
+        </div>
+
+        <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
+          <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
+          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">${hint}</div>
+        </div>
+      </div>
+    `;
+
+    $("bottomBar").classList.remove("hidden");
+    $("submitBtn").textContent = "Save";
+    setBtnDisabled_(false);
+
+    wireDropdown_();
+    hydrateApproverInput_();
+  }
+
+  function filteredApprovers_(q) {
+    const me = String(userProfile?.userId || "").trim();
+    return (approverOptions || []).filter(o => {
+      if (!o || !o.userId) return false;
+      // frontend: must NOT allow selecting self
+      if (String(o.userId).trim() === me) return false;
+      return matchesQuery_(o, q);
+    });
+  }
+
+  function hydrateApproverInput_() {
+    const hidden = $("approverUserId");
+    const search = $("approverSearch");
+    const uid = String(hidden?.value || "").trim();
+    if (!uid) { search.value = ""; return; }
+
+    const opt = (approverOptions || []).find(x => String(x.userId) === uid);
+    search.value = opt ? (opt.label || buildOptionLabel_(opt)) : "";
+  }
+
+  function renderDropdown_(q) {
+    const panel = $("ddPanel");
+    if (!panel) return;
+
+    const list = filteredApprovers_(q);
+    if (!list.length) {
+      panel.innerHTML = `<div class="dd-empty">No approver found</div>`;
+      return;
+    }
+
+    panel.innerHTML = list.map(o => {
+      const label = escapeHtml_(o.label || buildOptionLabel_(o));
+      const uid = escapeHtml_(o.userId);
+      return `<div class="dd-item" data-uid="${uid}">${label}</div>`;
+    }).join("");
+  }
+
+  function openDropdown_() {
+    const panel = $("ddPanel");
+    if (!panel) return;
+    panel.classList.remove("hidden");
+  }
+
+  function closeDropdown_() {
+    const panel = $("ddPanel");
+    if (!panel) return;
+    panel.classList.add("hidden");
+  }
+
+  function wireDropdown_() {
+    const input = $("approverSearch");
+    const panel = $("ddPanel");
+    const hidden = $("approverUserId");
+
+    if (!input || !panel || !hidden) return;
+
+    input.addEventListener("focus", function() {
+      renderDropdown_(input.value);
+      openDropdown_();
+    });
+
+    input.addEventListener("input", function() {
+      clearErr_("approverErr", "approverSearch");
+      hidden.value = "";
+      selectedApproverUserId = "";
+      renderDropdown_(input.value);
+      openDropdown_();
+    });
+
+    panel.addEventListener("click", function(ev) {
+      const item = ev.target?.closest?.(".dd-item");
+      if (!item) return;
+      const uid = String(item.getAttribute("data-uid") || "");
+      if (!uid) return;
+
+      selectedApproverUserId = uid;
+      hidden.value = uid;
+
+      const opt = (approverOptions || []).find(x => String(x.userId) === uid);
+      input.value = opt ? (opt.label || buildOptionLabel_(opt)) : "";
+
+      closeDropdown_();
+      clearErr_("approverErr", "approverSearch");
+    });
+
+    document.addEventListener("click", function(ev) {
+      const wrap = ev.target?.closest?.(".dd-wrap");
+      if (!wrap) closeDropdown_();
+    });
+  }
+
+  function validateBeforeSubmit_() {
+    const fullName = ($("fullName")?.value || "").trim();
+    const approverUserId = String($("approverUserId")?.value || "").trim();
+
+    if (!fullName) {
+      showErr_("nameErr", "fullName", "Please enter your full name.");
+      return false;
+    }
+
+    // non-first-user must choose approver
+    if (!isFirstUser_() && !approverUserId) {
+      showErr_("approverErr", "approverSearch", "Approver is required to complete registration.");
+      return false;
+    }
+
+    // if user typed but did not select from list => hidden is blank
+    if (!isFirstUser_() && !approverUserId) return false;
+
+    return true;
+  }
+
   async function handleSubmit() {
     try {
+      if (!validateBeforeSubmit_()) return;
+
       const fullName = ($("fullName")?.value || "").trim();
       const nickname = ($("nickname")?.value || "").trim();
-      const approverUserId = ($("approverUserId")?.value || "").trim();
+      const approverUserId = String($("approverUserId")?.value || "").trim();
 
-      if (!fullName) {
-        showNameErr_();
-        return;
-      }
-
-      if (!bootPayload?.isFirstUser && !approverUserId) {
-        showApproverErr_();
-        return;
-      }
-
-      showLoader("Registering...");
-      $("submitBtn").disabled = true;
+      showLoader("Saving...");
+      setBtnDisabled_(true);
 
       const data = await postFormUrlEncoded_({
         action: "register_user",
@@ -386,26 +440,47 @@
         displayName: userProfile.displayName || "",
         fullName,
         nickname,
-        approverUserId
+        approverUserId: approverUserId // may be blank for first user only
       });
 
       if (!data || !data.ok) {
         hideLoader();
-        $("submitBtn").disabled = false;
-        alert("❌ Save failed: " + String(data?.error || "unknown_error"));
+        setBtnDisabled_(false);
+
+        const errCode = String(data?.error || "unknown_error");
+        if (errCode === "missing_fullName") {
+          showErr_("nameErr", "fullName", "Please enter your full name.");
+          return;
+        }
+        if (errCode === "missing_approverUserId") {
+          showErr_("approverErr", "approverSearch", "Approver is required to complete registration.");
+          return;
+        }
+        if (errCode === "approver_not_found") {
+          showErr_("approverErr", "approverSearch", "Selected approver was not found. Please select again.");
+          return;
+        }
+        if (errCode === "approver_inactive") {
+          showErr_("approverErr", "approverSearch", "Selected approver is inactive. Please choose another.");
+          return;
+        }
+
+        alert("❌ Save failed: " + errCode);
         return;
       }
 
+      // update cache for index/remark usage
       writeBootCache_(userProfile.userId, {
         ok: true,
         onboarded: !!data.onboarded,
         isFirstUser: !!data.isFirstUser,
         employee: data.employee || null,
-        approverOptions: data.approverOptions || []
+        approverOptions: approverOptions || [],
+        holidays: boot?.holidays || [],
+        balances: boot?.balances || []
       });
 
       hideLoader();
-      markSuccess_();
       $("bottomBar").classList.add("hidden");
 
       $("rootBox").innerHTML = `
@@ -416,11 +491,17 @@
         </div>
       `;
 
-      setTimeout(() => doneAndExit(), 700);
+      // preferred: close in LIFF
+      setTimeout(() => {
+        try {
+          if (window.liff && liff.isInClient()) { liff.closeWindow(); return; }
+        } catch(e) {}
+        goReturn_();
+      }, 700);
 
     } catch (e) {
       hideLoader();
-      $("submitBtn").disabled = false;
+      setBtnDisabled_(false);
       alert("❌ Save failed: " + (e?.message || e));
     }
   }
@@ -429,25 +510,7 @@
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
 
-    if (!liff.isLoggedIn()) {
-      liff.login();
-      return;
-    }
-
-    if (wasSuccess_()) {
-      $("bottomBar").classList.add("hidden");
-      $("rootBox").innerHTML = `
-        <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
-          <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4">✅</div>
-          <div class="text-xl font-bold text-[#1F2937]">You’re all set!</div>
-          <div class="text-sm text-[#9CA3AF] mt-2">Registration complete.</div>
-        </div>
-      `;
-      clearSuccess_();
-      hideLoader();
-      setTimeout(() => doneAndExit(), 500);
-      return;
-    }
+    if (!liff.isLoggedIn()) { liff.login(); return; }
 
     userProfile = await liff.getProfile();
 
@@ -456,49 +519,34 @@
       $("avatarBox").classList.remove("hidden");
     }
 
-    const cached = readBootCache_(userProfile.userId);
-    if (cached && cached.ok) {
-      bootPayload = cached;
+    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "")}</span>`);
+    setStatusBadge_("Loading");
 
-      if (bootPayload.onboarded) {
-        hideLoader();
-        goReturn_();
-        return;
-      }
-
-      renderForm_(bootPayload);
+    // try cached boot first
+    const cachedBoot = readBootCache_(userProfile.userId);
+    if (cachedBoot && cachedBoot.ok) {
+      boot = cachedBoot;
+      approverOptions = Array.isArray(boot.approverOptions) ? boot.approverOptions : [];
+      renderForm_();
       hideLoader();
     }
 
-    let boot = null;
+    // fetch fresh bootstrap
     try {
-      showLoader("Checking access...");
-      boot = await apiBootstrap_(userProfile.userId);
+      const fresh = await apiBootstrap_(userProfile.userId);
+      if (!fresh || !fresh.ok) throw new Error(String(fresh?.error || "bootstrap_failed"));
+
+      boot = fresh;
+      approverOptions = Array.isArray(boot.approverOptions) ? boot.approverOptions : [];
+      writeBootCache_(userProfile.userId, boot);
+
+      renderForm_();
+      hideLoader();
+
     } catch (e) {
-      if (!cached) {
-        hideLoader();
-        renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
-      }
-      return;
-    }
-
-    if (!boot || !boot.ok) {
       hideLoader();
-      renderSystemError_(boot?.error || "bootstrap_failed");
-      return;
+      if (!boot) renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
     }
-
-    bootPayload = boot;
-    writeBootCache_(userProfile.userId, bootPayload);
-
-    if (bootPayload.onboarded) {
-      hideLoader();
-      goReturn_();
-      return;
-    }
-
-    renderForm_(bootPayload);
-    hideLoader();
   }
 
   init().catch(err => {
@@ -509,6 +557,4 @@
 </script>
 </body>
 </html>
-
-
 
