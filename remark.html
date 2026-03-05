@@ -24,7 +24,6 @@
 <body class="pb-20 antialiased">
   <div class="max-w-md mx-auto min-h-screen flex flex-col relative">
 
-    <!-- Header: match index.html / login.html -->
     <div class="bg-white px-6 pt-10 pb-4 rounded-b-3xl shadow-sm mb-5 relative z-10 border-b border-slate-100">
       <div class="flex items-center gap-4">
         <div id="avatarBox" class="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md ring-2 ring-blue-50 hidden">
@@ -41,7 +40,6 @@
 
     <div class="px-5 pb-24" id="rootBox"></div>
 
-    <!-- Loader: same style as other pages -->
     <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50">
       <div class="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center max-w-[180px] w-full">
         <div class="w-10 h-10 border-4 border-[#F3F4F6] border-t-[#3B82F6] rounded-full animate-spin mb-4"></div>
@@ -51,23 +49,68 @@
   </div>
 
 <script>
-  // ======= CONFIG =======
   const LIFF_ID = "2008997153-n5oIYKUP";
-  const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
   const LOGIN_PAGE = "login.html";
+
+  const BOOT_CACHE_KEY = "leave_boot_v2";
+  const BOOT_TTL_OK_MS = 3 * 60 * 1000;
+  const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
   const $ = (id) => document.getElementById(id);
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Loading..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
   function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
-  function doneAndExit(){ try { liff.closeWindow(); } catch(e) {} }
+
+  function doneAndExit(){
+    try {
+      if (window.liff && liff.isInClient()) {
+        liff.closeWindow();
+        return;
+      }
+    } catch(e) {}
+    try {
+      window.close();
+    } catch(e) {}
+  }
 
   function escapeHtml_(s) {
     return String(s ?? "")
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
+
   function escapeAttr_(s) { return escapeHtml_(s).replace(/`/g, "&#96;"); }
+
+  function readBootCache_(userId){
+    try{
+      const raw = localStorage.getItem(BOOT_CACHE_KEY);
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(!obj || obj.userId !== userId) return null;
+
+      const ttl = obj.onboarded ? BOOT_TTL_OK_MS : BOOT_TTL_NOT_OK_MS;
+      if(Date.now() - (obj.ts||0) > ttl) return null;
+
+      return obj.payload;
+    }catch(e){ return null; }
+  }
+
+  function writeBootCache_(userId, payload){
+    try{
+      localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({
+        userId,
+        ts: Date.now(),
+        onboarded: !!payload?.onboarded,
+        payload
+      }));
+    }catch(e){}
+  }
+
+  async function apiBootstrap_(userId){
+    const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
+    return res.json();
+  }
 
   async function apiGetRequestBundle_(requestId) {
     const res = await fetch(API_URL + "?action=get_request_bundle&requestId=" + encodeURIComponent(requestId));
@@ -107,6 +150,19 @@
       </div>`;
   }
 
+  function renderSystemError_(msg) {
+    $("title").textContent = "System Error";
+    $("subTitle").textContent = "Please try again";
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">⚠️</div>
+        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
+        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
+      </div>`;
+  }
+
   function renderNotFound_() {
     $("title").textContent = "Not Found";
     $("subTitle").textContent = "Error";
@@ -125,23 +181,23 @@
   }
 
   function formatLeaveRangeShort_(startVal, endVal) {
-  if (!startVal || !endVal) return "-";
-  const s = new Date(startVal);
-  const e = new Date(endVal);
-  if (isNaN(s) || isNaN(e)) return `${startVal} → ${endVal}`;
+    if (!startVal || !endVal) return "-";
+    const s = new Date(startVal);
+    const e = new Date(endVal);
+    if (isNaN(s) || isNaN(e)) return `${startVal} → ${endVal}`;
 
-  const mTH = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+    const mTH = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 
-  const sd = s.getDate(), sm = mTH[s.getMonth()], sy = s.getFullYear() + 543;
-  const ed = e.getDate(), em = mTH[e.getMonth()], ey = e.getFullYear() + 543;
+    const sd = s.getDate(), sm = mTH[s.getMonth()], sy = s.getFullYear() + 543;
+    const ed = e.getDate(), em = mTH[e.getMonth()], ey = e.getFullYear() + 543;
 
-  const sameDay = (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth() && s.getDate() === e.getDate());
+    const sameDay = (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth() && s.getDate() === e.getDate());
 
-  if (sameDay) return `${sd} ${sm} ${sy}`;
-  if (sm === em && sy === ey) return `${sd}-${ed} ${sm} ${sy}`;
-  if (sy === ey) return `${sd} ${sm} - ${ed} ${em} ${sy}`;
-  return `${sd} ${sm} ${sy} - ${ed} ${em} ${ey}`;
-}
+    if (sameDay) return `${sd} ${sm} ${sy}`;
+    if (sm === em && sy === ey) return `${sd}-${ed} ${sm} ${sy}`;
+    if (sy === ey) return `${sd} ${sm} - ${ed} ${em} ${sy}`;
+    return `${sd} ${sm} ${sy} - ${ed} ${em} ${ey}`;
+  }
 
   function formatFullNameNick_(fullName, nickname){
     const fn = String(fullName || "").trim();
@@ -149,6 +205,25 @@
     if (!fn && !nn) return "-";
     if (fn && nn) return `${fn} (${nn})`;
     return fn || nn;
+  }
+
+  function displayLeaveType_(req) {
+    const t = String(req?.leaveType || "").trim();
+    const other = String(req?.otherSpecify || "").trim();
+
+    if (t === "Sick") return "ลาป่วย";
+    if (t === "Annual") return "ลาพักร้อน";
+    if (t === "Personal") return "ลากิจ";
+    if (t === "Other") return other || "อื่นๆ";
+    return t || "-";
+  }
+
+  function displayDayPart_(dayPart) {
+    const dp = String(dayPart || "").trim();
+    if (dp === "Full Day") return "เต็มวัน";
+    if (dp === "Morning") return "ครึ่งวันเช้า";
+    if (dp === "Afternoon") return "ครึ่งวันบ่าย";
+    return dp || "-";
   }
 
   function kvRow_(label, valueHtml) {
@@ -162,14 +237,13 @@
   function guardRejectStatus_(req) {
     const st = String(req?.status || "").toUpperCase();
     if (st !== "SUBMITTED") {
-      alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
+      alert("แบบฟอร์มนี้ไม่อยู่ในสถานะรออนุมัติแล้ว");
       doneAndExit();
       return false;
     }
     return true;
   }
 
-  // --- Renderers ---
   function renderViewRemark_(req, requesterPerson) {
     const remark = String(req.remark || "").trim() || "-";
     const shortReq = shortReqId_(req.requestId);
@@ -178,7 +252,6 @@
     const fullNameNick = formatFullNameNick_(requesterPerson?.fullName, requesterPerson?.nickname);
 
     $("title").textContent = "Remark Details 💬";
-    // ✅ subTitle stays as "Hi, <name>" set in init()
 
     $("rootBox").innerHTML = `
       <div class="card mb-5 text-center pt-6 pb-5">
@@ -206,6 +279,8 @@
   function renderReject_(req, requesterPerson) {
     const shortReq = shortReqId_(req.requestId);
     const dateText = formatLeaveRangeShort_(req.startDate, req.endDate);
+    const leaveType = displayLeaveType_(req);
+    const dayPart = displayDayPart_(req.dayPart);
 
     const attUrl = req.attachmentUrl ? String(req.attachmentUrl).trim() : "";
     const attachHtml = attUrl
@@ -216,7 +291,6 @@
     const fullNameNick = formatFullNameNick_(requesterPerson?.fullName, requesterPerson?.nickname);
 
     $("title").textContent = "Reject Leave Request ❌";
-    // ✅ subTitle stays as "Hi, <name>" set in init()
 
     $("rootBox").innerHTML = `
       <div class="card mb-5">
@@ -230,8 +304,9 @@
           ${kvRow_("Req No.", `<span class="font-mono">${escapeHtml_(shortReq)}</span>`)}
           ${kvRow_("Line", escapeHtml_(lineName))}
           ${kvRow_("Name", escapeHtml_(fullNameNick))}
-          ${kvRow_("Type", escapeHtml_(req.leaveType || "-"))}
+          ${kvRow_("Type", escapeHtml_(leaveType))}
           ${kvRow_("Date", escapeHtml_(dateText))}
+          ${kvRow_("Duration", escapeHtml_(dayPart))}
           ${kvRow_("Days", escapeHtml_(`${req.leaveDays ?? "-"} วัน`))}
           ${kvRow_("Reason", escapeHtml_(req.reason || "-"))}
           ${kvRow_("Attach", attachHtml)}
@@ -280,7 +355,7 @@
       const st = String(latest?.request?.status || "").toUpperCase();
       if (st !== "SUBMITTED") {
         hideLoader();
-        alert("แบบฟอร์มนี้ถูกยืนยันแล้ว");
+        alert("แบบฟอร์มนี้ไม่อยู่ในสถานะรออนุมัติแล้ว");
         doneAndExit();
         return;
       }
@@ -297,8 +372,8 @@
         if (btn) btn.disabled = false;
 
         const errCode = String(data?.error || "unknown_error");
-        if (errCode === "not_onboarded") {
-          alert("กรุณา Login / Setup ก่อนใช้งานค่ะ");
+        if (errCode === "not_onboarded" || errCode === "onboarding_incomplete") {
+          alert("กรุณา Setup ข้อมูลการใช้งานให้ครบก่อน");
           redirectToLogin_();
           return;
         }
@@ -307,6 +382,12 @@
           doneAndExit();
           return;
         }
+        if (errCode === "invalid_status") {
+          alert("แบบฟอร์มนี้ไม่อยู่ในสถานะรออนุมัติแล้ว");
+          doneAndExit();
+          return;
+        }
+
         alert("❌ ไม่สามารถทำรายการได้: " + errCode);
         return;
       }
@@ -340,7 +421,6 @@
     const requestId = params.get("requestId");
     if (!mode || !requestId) { hideLoader(); renderNotFound_(); return; }
 
-    // Fetch profile first (for header look/feel)
     let profile = null;
     try { profile = await liff.getProfile(); } catch(e) {}
 
@@ -352,7 +432,38 @@
       }
     }
 
-    // Fetch bundle (request + requesterPerson)
+    // onboarding/access gate before using reject flow
+    if (profile) {
+      const cachedBoot = readBootCache_(profile.userId);
+      if (cachedBoot && cachedBoot.ok && !cachedBoot.onboarded) {
+        hideLoader();
+        redirectToLogin_();
+        return;
+      }
+
+      let boot = null;
+      try { boot = await apiBootstrap_(profile.userId); }
+      catch (e) {
+        hideLoader();
+        renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+        return;
+      }
+
+      if (!boot || !boot.ok) {
+        hideLoader();
+        renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
+        return;
+      }
+
+      writeBootCache_(profile.userId, boot);
+
+      if (!boot.onboarded) {
+        hideLoader();
+        redirectToLogin_();
+        return;
+      }
+    }
+
     const data = await apiGetRequestBundle_(requestId);
     if (!data || !data.ok || !data.request) { hideLoader(); renderNotFound_(); return; }
 
@@ -379,11 +490,10 @@
   init().catch(err => {
     console.error(err);
     hideLoader();
-    renderAccessDenied_("LIFF Init Error: " + (err.message || err));
+    renderSystemError_("LIFF Init Error: " + (err.message || err));
   });
 </script>
 </body>
 </html>
-
 
 
