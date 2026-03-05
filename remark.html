@@ -69,9 +69,7 @@
         return;
       }
     } catch(e) {}
-    try {
-      window.close();
-    } catch(e) {}
+    try { window.close(); } catch(e) {}
   }
 
   function escapeHtml_(s) {
@@ -136,18 +134,6 @@
   function redirectToLogin_() {
     const ret = location.pathname + location.search;
     location.replace(LOGIN_PAGE + "?return=" + encodeURIComponent(ret));
-  }
-
-  function renderAccessDenied_(msg) {
-    $("title").textContent = "Access Denied 🔒";
-    $("subTitle").textContent = msg || "This page is restricted";
-    $("rootBox").innerHTML = `
-      <div class="card text-center py-10">
-        <div class="text-4xl mb-3">🔒</div>
-        <div class="text-lg font-bold text-[#1F2937]">Access Denied</div>
-        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถใช้งานหน้านี้ได้")}</div>
-        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="doneAndExit()">Close</button>
-      </div>`;
   }
 
   function renderSystemError_(msg) {
@@ -372,8 +358,9 @@
         if (btn) btn.disabled = false;
 
         const errCode = String(data?.error || "unknown_error");
-        if (errCode === "not_onboarded" || errCode === "onboarding_incomplete") {
-          alert("กรุณา Setup ข้อมูลการใช้งานให้ครบก่อน");
+
+        if (errCode === "not_onboarded" || errCode === "registration_incomplete") {
+          alert("Please complete your registration before submitting leave.");
           redirectToLogin_();
           return;
         }
@@ -432,10 +419,10 @@
       }
     }
 
-    // onboarding/access gate before using reject flow
-    if (profile) {
+    // --- onboarding/access gate (must be registration complete) ---
+    if (profile && profile.userId) {
       const cachedBoot = readBootCache_(profile.userId);
-      if (cachedBoot && cachedBoot.ok && !cachedBoot.onboarded) {
+      if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded === false) {
         hideLoader();
         redirectToLogin_();
         return;
@@ -463,6 +450,7 @@
         return;
       }
     }
+    // -------------------------------------------------------------
 
     const data = await apiGetRequestBundle_(requestId);
     if (!data || !data.ok || !data.request) { hideLoader(); renderNotFound_(); return; }
@@ -490,10 +478,8 @@
   init().catch(err => {
     console.error(err);
     hideLoader();
-    renderSystemError_("LIFF Init Error: " + (err.message || err));
+    renderSystemError_("LIFF Init Error: " + (err?.message || err));
   });
 </script>
 </body>
 </html>
-
-
