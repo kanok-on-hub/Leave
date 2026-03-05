@@ -289,7 +289,7 @@
 
     if (!hasApprover_(boot)) {
       appBox.classList.remove("hidden");
-      setSubmitEnabled_(false, "Approver is required before you can submit this request.");
+      setSubmitEnabled_(false, "กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
       return;
     }
 
@@ -495,7 +495,7 @@
     }
 
     if (!hasApprover_(bootPayload)) {
-      alert("Approver is required before you can submit this request.");
+      alert("กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
       redirectToLogin_();
       return;
     }
@@ -548,7 +548,7 @@
         }
 
         if (errCode === "approver_required_for_submission") {
-          alert("Approver is required before you can submit this request.");
+          alert("กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
           redirectToLogin_();
           return;
         }
