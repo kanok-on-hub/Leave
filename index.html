@@ -65,7 +65,7 @@
 
       <div id="approverNotice" class="hidden card bg-[#FFF7ED] border border-[#FED7AA]">
         <div class="text-sm font-bold text-[#C2410C] mb-2">Approver required</div>
-        <div class="text-[12px] text-[#9A3412] leading-relaxed">
+        <div class="text-[12px] text-[#EA580C] leading-relaxed">
           ⚠️ ยังไม่พบข้อมูลผู้อนุมัติในระบบ กรุณาอัปเดตก่อนใช้งาน
         </div>
         <button onclick="redirectToLogin_()" class="w-full mt-4 bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-3 rounded-2xl font-bold transition-all">
@@ -215,7 +215,7 @@
     btn.classList.toggle("btn-disabled", !enabled);
 
     if (!enabled) {
-      hint.textContent = hintText || "กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้";
+      hint.textContent = hintText || "ระบบไม่อนุญาตให้สร้างแบบฟอร์มหากยังไม่มีผู้อนุมัติ";
       hint.classList.remove("hidden");
     } else {
       hint.classList.add("hidden");
@@ -283,13 +283,13 @@
 
     if (!boot?.employee?.userId) {
       regBox.classList.remove("hidden");
-      setSubmitEnabled_(false, "กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
+      setSubmitEnabled_(false, "ระบบไม่อนุญาตให้สร้างแบบฟอร์มหากยังไม่มีผู้อนุมัติ");
       return;
     }
 
     if (!hasApprover_(boot)) {
       appBox.classList.remove("hidden");
-      setSubmitEnabled_(false, "กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
+      setSubmitEnabled_(false, "ระบบไม่อนุญาตให้สร้างแบบฟอร์มหากยังไม่มีผู้อนุมัติ");
       return;
     }
 
@@ -489,13 +489,13 @@
 
   async function handleSubmit() {
     if (!bootPayload?.employee?.userId) {
-      alert("กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
+      alert("ระบบไม่อนุญาตให้สร้างแบบฟอร์มหากยังไม่มีผู้อนุมัติ");
       redirectToLogin_();
       return;
     }
 
     if (!hasApprover_(bootPayload)) {
-      alert("กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
+      alert("ระบบไม่อนุญาตให้สร้างแบบฟอร์มหากยังไม่มีผู้อนุมัติ");
       redirectToLogin_();
       return;
     }
@@ -542,13 +542,13 @@
         $('submitBtn').disabled = false;
 
         if (errCode === "employee_not_found" || errCode === "registration_incomplete") {
-          alert("กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
+          alert("ระบบไม่อนุญาตให้สร้างแบบฟอร์มหากยังไม่มีผู้อนุมัติ");
           redirectToLogin_();
           return;
         }
 
         if (errCode === "approver_required_for_submission") {
-          alert("กรุณาตั้งค่าผู้อนุมัติก่อน จึงจะสามารถสร้างแบบฟอร์มได้");
+          alert("ระบบไม่อนุญาตให้สร้างแบบฟอร์มหากยังไม่มีผู้อนุมัติ");
           redirectToLogin_();
           return;
         }
