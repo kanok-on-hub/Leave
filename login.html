@@ -273,13 +273,13 @@
       <div class="card space-y-4">
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
-          <input id="fullName" type="text" class="input" placeholder="Please enter your full name" value="${escapeHtml_(emp?.fullName || "")}" />
+          <input id="fullName" type="text" class="input" placeholder="กรอกชื่อ - นามสกุล" value="${escapeHtml_(emp?.fullName || "")}" />
           <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold"></div>
         </div>
 
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
-          <input id="nickname" type="text" class="input" placeholder="Please enter your nickname" value="${escapeHtml_(emp?.nickname || "")}" />
+          <input id="nickname" type="text" class="input" placeholder="กรอกชื่อเล่น" value="${escapeHtml_(emp?.nickname || "")}" />
         </div>
       </div>
 
@@ -289,7 +289,7 @@
         </div>
 
         <div class="dd-wrap">
-          <input id="approverSearch" type="text" class="input" placeholder="Search approver name" autocomplete="off" />
+          <input id="approverSearch" type="text" class="input" placeholder="ค้นหาผู้อนุมัติ" autocomplete="off" />
           <input id="approverUserId" type="hidden" value="${escapeHtml_(selectedApproverUserId)}" />
 
           <div id="ddPanel" class="dd-panel hidden"></div>
