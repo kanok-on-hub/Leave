@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
-  <title>Leave Management</title>
+  <title>Registration • Leave Management</title>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -22,7 +22,6 @@
     .btn-disabled { opacity: .55; cursor: not-allowed; }
     ::-webkit-scrollbar { display: none; }
 
-    /* Searchable dropdown (minimal, matches current style) */
     .dd-wrap { position: relative; }
     .dd-panel {
       position: absolute;
@@ -35,12 +34,27 @@
       box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
       overflow: hidden;
       z-index: 50;
+      max-height: 280px;
+      overflow-y: auto;
     }
     .dd-item { padding: 12px 14px; cursor: pointer; }
     .dd-item:hover { background: #F9FAFB; }
-    .dd-item.disabled { opacity: .45; cursor: not-allowed; }
-    .dd-item.disabled:hover { background: #fff; }
     .dd-empty { padding: 14px; color:#9CA3AF; font-size: 12px; text-align:center; }
+
+    select.input {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, #9CA3AF 50%),
+        linear-gradient(135deg, #9CA3AF 50%, transparent 50%);
+      background-position:
+        calc(100% - 18px) calc(1.05rem),
+        calc(100% - 12px) calc(1.05rem);
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+      padding-right: 2.5rem;
+    }
   </style>
 </head>
 
@@ -67,7 +81,7 @@
     <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F3F4F6] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-40" id="bottomBar">
       <button id="submitBtn" onclick="handleSubmit()"
         class="w-full bg-[#60A5FA] hover:bg-[#3B82F6] text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all">
-        ลงทะเบียน
+        บันทึกข้อมูล
       </button>
     </div>
 
@@ -84,19 +98,30 @@
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
   const DEFAULT_RETURN = "index.html";
 
-  const BOOT_CACHE_KEY = "leave_boot_v2";
+  const BOOT_CACHE_KEY = "leave_boot_v3";
   const BOOT_TTL_OK_MS = 3 * 60 * 1000;
   const BOOT_TTL_NOT_OK_MS = 20 * 1000;
+
+  const FALLBACK_COMPANY_OPTIONS = ["AVT", "ACR", "BDI"];
 
   const $ = (id) => document.getElementById(id);
 
   let userProfile = null;
   let boot = null;
   let approverOptions = [];
+  let companyOptions = FALLBACK_COMPANY_OPTIONS.slice();
   let selectedApproverUserId = "";
 
-  function showLoader(msg){ $("loaderText").textContent = msg || "Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
-  function hideLoader(){ $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
+  function showLoader(msg){
+    $("loaderText").textContent = msg || "Processing...";
+    $("loader").classList.remove("hidden");
+    $("loader").classList.add("flex");
+  }
+
+  function hideLoader(){
+    $("loader").classList.add("hidden");
+    $("loader").classList.remove("flex");
+  }
 
   function doneAndExit(){
     try {
@@ -118,7 +143,10 @@
 
   function setStatusBadge_(text) {
     const b = $("statusBadge");
-    if (!text) { b.classList.add("hidden"); return; }
+    if (!text) {
+      b.classList.add("hidden");
+      return;
+    }
     b.textContent = text;
     b.classList.remove("hidden");
   }
@@ -141,10 +169,12 @@
       if(!obj || obj.userId !== userId) return null;
 
       const ttl = obj.onboarded ? BOOT_TTL_OK_MS : BOOT_TTL_NOT_OK_MS;
-      if(Date.now() - (obj.ts||0) > ttl) return null;
+      if(Date.now() - (obj.ts || 0) > ttl) return null;
 
       return obj.payload;
-    }catch(e){ return null; }
+    }catch(e){
+      return null;
+    }
   }
 
   function writeBootCache_(userId, payload){
@@ -179,11 +209,15 @@
     const fn = String(x.fullName || "").trim();
     const nn = String(x.nickname || "").trim();
     const dn = String(x.displayName || "").trim();
+    const co = String(x.company || "").trim();
 
-    if (fn && nn) return `${fn} (${nn})`;
-    if (fn) return fn;
-    if (nn) return nn;
-    return dn || "-";
+    let label = "-";
+    if (fn && nn) label = `${fn} (${nn})`;
+    else if (fn) label = fn;
+    else if (nn) label = nn;
+    else label = dn || "-";
+
+    return co ? `${label} • ${co}` : label;
   }
 
   function normalizeStr_(s) {
@@ -194,16 +228,15 @@
     const qq = normalizeStr_(q);
     if (!qq) return true;
 
-    const a = normalizeStr_(opt.fullName);
-    const b = normalizeStr_(opt.nickname);
-    const c = normalizeStr_(opt.displayName);
-    const d = normalizeStr_(opt.label);
+    const fields = [
+      opt.fullName,
+      opt.nickname,
+      opt.displayName,
+      opt.label,
+      opt.company
+    ].map(normalizeStr_);
 
-    return a.includes(qq) || b.includes(qq) || c.includes(qq) || d.includes(qq);
-  }
-
-  function isFirstUser_() {
-    return !!boot?.isFirstUser;
+    return fields.some(v => v.includes(qq));
   }
 
   function existingEmployee_() {
@@ -212,6 +245,10 @@
 
   function existingApproverUserId_() {
     return String(boot?.employee?.approverUserId || "").trim();
+  }
+
+  function existingCompany_() {
+    return String(boot?.employee?.company || "").trim();
   }
 
   function setBtnDisabled_(disabled) {
@@ -230,12 +267,11 @@
   function showErr_(id, inputId, msg) {
     const el = $(id);
     const inp = $(inputId);
-    if (el) { el.textContent = msg; el.classList.remove("hidden"); }
-    if (inp) inp.classList.add("err");
-    if (inp) {
-      const once = function(){ clearErr_(id, inputId); inp.removeEventListener("input", once); };
-      inp.addEventListener("input", once);
+    if (el) {
+      el.textContent = msg;
+      el.classList.remove("hidden");
     }
+    if (inp) inp.classList.add("err");
   }
 
   function renderSystemError_(msg) {
@@ -253,21 +289,22 @@
     $("bottomBar").classList.add("hidden");
   }
 
+  function renderCompanyOptions_(selectedCompany) {
+    return companyOptions.map(c => {
+      const selected = String(c) === String(selectedCompany) ? 'selected' : '';
+      return `<option value="${escapeHtml_(c)}" ${selected}>${escapeHtml_(c)}</option>`;
+    }).join("");
+  }
+
   function renderForm_() {
     const emp = existingEmployee_();
     const existingApprover = existingApproverUserId_();
+    const existingCompany = existingCompany_();
 
-    selectedApproverUserId = existingApprover; // prefill if exists
+    selectedApproverUserId = existingApprover;
 
     setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`);
-
-    // status badge
-    if (!emp) setStatusBadge_("New");
-    else setStatusBadge_(existingApprover ? "Active" : (isFirstUser_() ? "First user" : "Incomplete"));
-
-    const hint = isFirstUser_()
-      ? `You can register without an approver to initialize the system. <span class="font-bold">You will not be able to submit leave until an approver is set.</span>`
-      : `Approver selection is required to complete registration. Contact an admin if you need to change it later.`;
+    setStatusBadge_(emp ? "Profile" : "New");
 
     $("rootBox").innerHTML = `
       <div class="card space-y-4">
@@ -281,11 +318,20 @@
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
           <input id="nickname" type="text" class="input" placeholder="กรอกชื่อเล่น" value="${escapeHtml_(emp?.nickname || "")}" />
         </div>
+
+        <div>
+          <label class="text-sm font-bold text-[#1F2937] block mb-2">Company <span class="text-[#EF4444]">*</span></label>
+          <select id="company" class="input">
+            <option value="">เลือกบริษัท</option>
+            ${renderCompanyOptions_(existingCompany)}
+          </select>
+          <div id="companyErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold"></div>
+        </div>
       </div>
 
       <div class="space-y-2">
         <div class="flex justify-between items-center px-1 h-7">
-          <label class="text-sm font-bold text-[#1F2937]">Approver ${isFirstUser_() ? "" : `<span class="text-[#EF4444]">*</span>`}</label>
+          <label class="text-sm font-bold text-[#1F2937]">Approver <span class="text-[#EF4444]">*</span></label>
         </div>
 
         <div class="dd-wrap">
@@ -298,25 +344,27 @@
 
         <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
           <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
-          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">${hint}</div>
+          <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
+            ข้อมูลนี้จะถูกใช้ร่วมกันสำหรับการใช้งานระบบ เช่น Leave Request และ flow อื่น ๆ ในอนาคต
+          </div>
         </div>
       </div>
     `;
 
     $("bottomBar").classList.remove("hidden");
-    $("submitBtn").textContent = "ลงทะเบียน";
+    $("submitBtn").textContent = "บันทึกข้อมูล";
     setBtnDisabled_(false);
 
     wireDropdown_();
     hydrateApproverInput_();
+
+    $("fullName").addEventListener("input", () => clearErr_("nameErr", "fullName"));
+    $("company").addEventListener("change", () => clearErr_("companyErr", "company"));
   }
 
   function filteredApprovers_(q) {
-    const me = String(userProfile?.userId || "").trim();
     return (approverOptions || []).filter(o => {
       if (!o || !o.userId) return false;
-      // frontend: must NOT allow selecting self
-      if (String(o.userId).trim() === me) return false;
       return matchesQuery_(o, q);
     });
   }
@@ -325,7 +373,10 @@
     const hidden = $("approverUserId");
     const search = $("approverSearch");
     const uid = String(hidden?.value || "").trim();
-    if (!uid) { search.value = ""; return; }
+    if (!uid) {
+      search.value = "";
+      return;
+    }
 
     const opt = (approverOptions || []).find(x => String(x.userId) === uid);
     search.value = opt ? (opt.label || buildOptionLabel_(opt)) : "";
@@ -349,15 +400,11 @@
   }
 
   function openDropdown_() {
-    const panel = $("ddPanel");
-    if (!panel) return;
-    panel.classList.remove("hidden");
+    $("ddPanel")?.classList.remove("hidden");
   }
 
   function closeDropdown_() {
-    const panel = $("ddPanel");
-    if (!panel) return;
-    panel.classList.add("hidden");
+    $("ddPanel")?.classList.add("hidden");
   }
 
   function wireDropdown_() {
@@ -383,6 +430,7 @@
     panel.addEventListener("click", function(ev) {
       const item = ev.target?.closest?.(".dd-item");
       if (!item) return;
+
       const uid = String(item.getAttribute("data-uid") || "");
       if (!uid) return;
 
@@ -404,23 +452,27 @@
 
   function validateBeforeSubmit_() {
     const fullName = ($("fullName")?.value || "").trim();
+    const company = ($("company")?.value || "").trim();
     const approverUserId = String($("approverUserId")?.value || "").trim();
+
+    let ok = true;
 
     if (!fullName) {
       showErr_("nameErr", "fullName", "Please enter your full name.");
-      return false;
+      ok = false;
     }
 
-    // non-first-user must choose approver
-    if (!isFirstUser_() && !approverUserId) {
-      showErr_("approverErr", "approverSearch", "⚠️ Approver is required to complete registration.");
-      return false;
+    if (!company) {
+      showErr_("companyErr", "company", "Please select your company.");
+      ok = false;
     }
 
-    // if user typed but did not select from list => hidden is blank
-    if (!isFirstUser_() && !approverUserId) return false;
+    if (!approverUserId) {
+      showErr_("approverErr", "approverSearch", "Approver is required to complete registration.");
+      ok = false;
+    }
 
-    return true;
+    return ok;
   }
 
   async function handleSubmit() {
@@ -429,9 +481,10 @@
 
       const fullName = ($("fullName")?.value || "").trim();
       const nickname = ($("nickname")?.value || "").trim();
+      const company = ($("company")?.value || "").trim();
       const approverUserId = String($("approverUserId")?.value || "").trim();
 
-      showLoader("Registering...");
+      showLoader("Saving...");
       setBtnDisabled_(true);
 
       const data = await postFormUrlEncoded_({
@@ -440,7 +493,8 @@
         displayName: userProfile.displayName || "",
         fullName,
         nickname,
-        approverUserId: approverUserId // may be blank for first user only
+        company,
+        approverUserId
       });
 
       if (!data || !data.ok) {
@@ -448,18 +502,27 @@
         setBtnDisabled_(false);
 
         const errCode = String(data?.error || "unknown_error");
+
         if (errCode === "missing_fullName") {
           showErr_("nameErr", "fullName", "Please enter your full name.");
           return;
         }
+
+        if (errCode === "missing_company" || errCode === "invalid_company") {
+          showErr_("companyErr", "company", "Please select a valid company.");
+          return;
+        }
+
         if (errCode === "missing_approverUserId") {
           showErr_("approverErr", "approverSearch", "Approver is required to complete registration.");
           return;
         }
+
         if (errCode === "approver_not_found") {
           showErr_("approverErr", "approverSearch", "Selected approver was not found. Please select again.");
           return;
         }
+
         if (errCode === "approver_inactive") {
           showErr_("approverErr", "approverSearch", "Selected approver is inactive. Please choose another.");
           return;
@@ -469,15 +532,12 @@
         return;
       }
 
-      // update cache for index/remark usage
       writeBootCache_(userProfile.userId, {
         ok: true,
         onboarded: !!data.onboarded,
-        isFirstUser: !!data.isFirstUser,
         employee: data.employee || null,
         approverOptions: approverOptions || [],
-        holidays: boot?.holidays || [],
-        balances: boot?.balances || []
+        companyOptions: companyOptions || []
       });
 
       hideLoader();
@@ -490,7 +550,6 @@
         </div>
       `;
 
-      // preferred: close in LIFF
       setTimeout(() => {
         try {
           if (window.liff && liff.isInClient()) { liff.closeWindow(); return; }
@@ -509,7 +568,10 @@
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
 
-    if (!liff.isLoggedIn()) { liff.login(); return; }
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
 
     userProfile = await liff.getProfile();
 
@@ -521,27 +583,42 @@
     setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "")}</span>`);
     setStatusBadge_("Loading");
 
-    // try cached boot first
     const cachedBoot = readBootCache_(userProfile.userId);
     if (cachedBoot && cachedBoot.ok) {
       boot = cachedBoot;
-      approverOptions = Array.isArray(boot.approverOptions) ? boot.approverOptions : [];
+      approverOptions = Array.isArray(boot.approverOptions) ? boot.approverOptions.map(x => ({
+        ...x,
+        label: x.label || buildOptionLabel_(x)
+      })) : [];
+      companyOptions = Array.isArray(boot.companyOptions) && boot.companyOptions.length
+        ? boot.companyOptions
+        : FALLBACK_COMPANY_OPTIONS.slice();
+
       renderForm_();
       hideLoader();
     }
 
-    // fetch fresh bootstrap
     try {
       const fresh = await apiBootstrap_(userProfile.userId);
       if (!fresh || !fresh.ok) throw new Error(String(fresh?.error || "bootstrap_failed"));
 
       boot = fresh;
-      approverOptions = Array.isArray(boot.approverOptions) ? boot.approverOptions : [];
-      writeBootCache_(userProfile.userId, boot);
+      approverOptions = Array.isArray(boot.approverOptions) ? boot.approverOptions.map(x => ({
+        ...x,
+        label: x.label || buildOptionLabel_(x)
+      })) : [];
+      companyOptions = Array.isArray(boot.companyOptions) && boot.companyOptions.length
+        ? boot.companyOptions
+        : FALLBACK_COMPANY_OPTIONS.slice();
+
+      writeBootCache_(userProfile.userId, {
+        ...boot,
+        companyOptions,
+        approverOptions
+      });
 
       renderForm_();
       hideLoader();
-
     } catch (e) {
       hideLoader();
       if (!boot) renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
@@ -556,4 +633,3 @@
 </script>
 </body>
 </html>
-
