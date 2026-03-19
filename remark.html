@@ -57,6 +57,9 @@
   const BOOT_TTL_OK_MS = 3 * 60 * 1000;
   const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
+  const SHORT_REQ_LEN = 8;
+  const HUMAN_CMD_REJECTED_PREFIX = "ไม่อนุมัติรายการ";
+
   const $ = (id) => document.getElementById(id);
 
   function showLoader(msg){ $("loaderText").textContent = msg || "Loading..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
@@ -162,8 +165,18 @@
   }
 
   function shortReqId_(reqId) {
-    const s = String(reqId || "");
-    return "#" + (s.length <= 8 ? s : s.slice(-8));
+    const s = String(reqId || "").replace(/[^a-zA-Z0-9]/g, "");
+    if (!s) return "";
+    return s.length <= SHORT_REQ_LEN ? s.toUpperCase() : s.slice(-SHORT_REQ_LEN).toUpperCase();
+  }
+
+  function requestLabel_(reqId) {
+    const sid = shortReqId_(reqId);
+    return sid ? ("#" + sid) : "#-";
+  }
+
+  function buildRejectedCommandText_(requestId) {
+    return `${HUMAN_CMD_REJECTED_PREFIX} ${requestLabel_(requestId)}`;
   }
 
   function formatLeaveRangeShort_(startVal, endVal) {
@@ -232,7 +245,7 @@
 
   function renderViewRemark_(req, requesterPerson) {
     const remark = String(req.remark || "").trim() || "-";
-    const shortReq = shortReqId_(req.requestId);
+    const shortReq = requestLabel_(req.requestId);
 
     const lineName = String(req.name || "-");
     const fullNameNick = formatFullNameNick_(requesterPerson?.fullName, requesterPerson?.nickname);
@@ -263,7 +276,7 @@
   }
 
   function renderReject_(req, requesterPerson) {
-    const shortReq = shortReqId_(req.requestId);
+    const shortReq = requestLabel_(req.requestId);
     const dateText = formatLeaveRangeShort_(req.startDate, req.endDate);
     const leaveType = displayLeaveType_(req);
     const dayPart = displayDayPart_(req.dayPart);
@@ -379,13 +392,17 @@
         return;
       }
 
-      await liff.sendMessages([{ type: "text", text: "LEAVE_REJECTED:" + requestId }]);
+      const rejectedCommandText = buildRejectedCommandText_(requestId);
+      try {
+        await liff.sendMessages([{ type: "text", text: rejectedCommandText }]);
+      } catch(e) {}
 
       hideLoader();
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-10 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Request rejected.</div>
+          <div class="text-sm text-[#2563EB] font-bold mt-2">${escapeHtml_(requestLabel_(requestId))}</div>
         </div>
       `;
       setTimeout(() => doneAndExit(), 1200);
@@ -419,7 +436,6 @@
       }
     }
 
-    // --- onboarding/access gate (must be registration complete) ---
     if (profile && profile.userId) {
       const cachedBoot = readBootCache_(profile.userId);
       if (cachedBoot && cachedBoot.ok && cachedBoot.onboarded === false) {
@@ -450,7 +466,6 @@
         return;
       }
     }
-    // -------------------------------------------------------------
 
     const data = await apiGetRequestBundle_(requestId);
     if (!data || !data.ok || !data.request) { hideLoader(); renderNotFound_(); return; }
