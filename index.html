@@ -186,6 +186,9 @@
   const BOOT_TTL_OK_MS = 3 * 60 * 1000;
   const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
+  const SHORT_REQ_LEN = 8;
+  const HUMAN_CMD_DRAFT_PREFIX = "แบบฟอร์มร่าง";
+
   let companyHolidays = [];
   let userProfile = null;
   let leaveBalances = {};
@@ -448,6 +451,21 @@
     return "";
   }
 
+  function shortReqId_(requestId) {
+    const s = String(requestId || "").replace(/[^a-zA-Z0-9]/g, "");
+    if (!s) return "";
+    return s.length <= SHORT_REQ_LEN ? s.toUpperCase() : s.slice(-SHORT_REQ_LEN).toUpperCase();
+  }
+
+  function requestLabel_(requestId) {
+    const sid = shortReqId_(requestId);
+    return sid ? ("#" + sid) : "#-";
+  }
+
+  function buildDraftCommandText_(requestId) {
+    return `${HUMAN_CMD_DRAFT_PREFIX} ${requestLabel_(requestId)}`;
+  }
+
   async function prefillIfEdit_() {
     const params = new URLSearchParams(location.search);
     const mode = params.get("mode");
@@ -561,6 +579,8 @@
         throw new Error(errCode);
       }
 
+      const draftCommandText = buildDraftCommandText_(data.requestId);
+
       hideLoader();
       $('bottomBar').classList.add('hidden');
       $('formUI').innerHTML = `
@@ -568,10 +588,11 @@
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Draft saved.</div>
           <div class="text-sm text-[#9CA3AF] mt-2">ยืนยันรายการต่อในแชท</div>
+          <div class="text-sm text-[#2563EB] font-bold mt-2">${requestLabel_(data.requestId)}</div>
         </div>
       `;
 
-      try { await liff.sendMessages([{ type: "text", text: "LEAVE_DRAFT:" + data.requestId }]); } catch(e) {}
+      try { await liff.sendMessages([{ type: "text", text: draftCommandText }]); } catch(e) {}
       setTimeout(() => doneAndExit(), 900);
 
     } catch (e) {
