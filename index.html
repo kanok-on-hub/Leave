@@ -187,7 +187,7 @@
   const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
   const SHORT_REQ_LEN = 8;
-  const HUMAN_CMD_DRAFT_PREFIX = "แบบฟอร์มร่าง";
+  const HUMAN_CMD_DRAFT_PREFIX = "อัปเดตรายการแล้ว";
 
   let companyHolidays = [];
   let userProfile = null;
@@ -588,7 +588,6 @@
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Draft saved.</div>
           <div class="text-sm text-[#9CA3AF] mt-2">ยืนยันรายการต่อในแชท</div>
-          <div class="text-sm text-[#2563EB] font-bold mt-2">${requestLabel_(data.requestId)}</div>
         </div>
       `;
 
