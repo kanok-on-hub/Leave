@@ -614,7 +614,7 @@
     if (!data || !data.ok) {
       attachUploadState = "error";
       renderUploadPreview_("error");
-      return { ok: false, error: data?.error || "upload_failed" };
+      return { ok: false, error: data?.error || "upload_failed", detail: data?.detail || "" };
     }
 
     attachedUrl       = data.url;
@@ -843,7 +843,8 @@
         if (!upResult.ok) {
           hideLoader();
           $('submitBtn').disabled = false;
-          showUploadError_("อัปโหลดไฟล์ไม่สำเร็จ: " + (upResult.error || "unknown") + " กรุณาลองใหม่");
+          const detailMsg = upResult.detail ? " (" + upResult.detail + ")" : "";
+          showUploadError_("อัปโหลดไฟล์ไม่สำเร็จ: " + (upResult.error || "unknown") + detailMsg + " กรุณาลองใหม่");
           return;
         }
       }
