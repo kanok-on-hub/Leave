@@ -801,7 +801,11 @@
       showLoader("Saving...");
       $('submitBtn').disabled = true;
 
-      // Step 1: upsert_draft (without attachmentUrl yet for new requests)
+      // Step 1: upload attachment first (needs requestId — so upsert_draft creates it)
+      // We do a 2-pass: first upsert_draft without attachmentUrl to get requestId,
+      // then upload_attachment, then the Bot will receive the draft command with URL already in sheet.
+
+      // Pass 1: create/update DRAFT row (no attachmentUrl yet — backend no longer enforces here)
       const draftData = await postFormUrlEncoded_({
         action:        "upsert_draft",
         requestId:     requestId,
@@ -813,19 +817,13 @@
         endDate,
         dayPart:       $('durationValue').value || "Full Day",
         reason,
-        attachmentUrl: attachedUrl  // pass existing URL if already uploaded
+        attachmentUrl: snapshotUrl  // pass existing URL if already uploaded in a previous session
       });
 
       if (!draftData || !draftData.ok || !draftData.requestId) {
         const errCode = String(draftData?.error || "unknown_error");
         hideLoader();
         $('submitBtn').disabled = false;
-
-        if (errCode === "attachment_required") {
-          showUploadError_("กรุณาแนบใบรับรองแพทย์ก่อนบันทึก");
-          $("attachSection").scrollIntoView({ behavior: "smooth", block: "center" });
-          return;
-        }
         if (errCode === "employee_not_found" || errCode === "registration_incomplete" || errCode === "approver_required_for_submission") {
           alert("ระบบไม่อนุญาตให้สร้างแบบฟอร์มหากยังไม่มีผู้อนุมัติ");
           redirectToLogin_();
@@ -837,10 +835,9 @@
 
       const finalRequestId = draftData.requestId;
 
-      // Step 2: upload attachment if file selected and not yet uploaded
-      // Use snapshotFile (captured before validateOnFly) in case validateOnFly cleared attachedFile
+      // Pass 2: upload attachment (now we have requestId)
       if (needAttach && snapshotFile && !snapshotUrl) {
-        attachedFile = snapshotFile; // restore in case it was cleared
+        attachedFile = snapshotFile; // restore snapshot in case anything cleared it
         showLoader("Uploading attachment...");
         const upResult = await uploadAttachment_(finalRequestId);
         if (!upResult.ok) {
