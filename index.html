@@ -420,6 +420,25 @@
   // Clear memo when holidays load (companyHolidays changed)
   function clearWdCache_() { Object.keys(_wdCache).forEach(k => delete _wdCache[k]); }
 
+  // Fresh calculation — bypasses memo, used at submit time to avoid stale holiday cache
+  function calcWorkingDaysFresh_(sStr, eStr) {
+    const s = new Date(sStr);
+    const e = new Date(eStr);
+    if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
+    let total = 0;
+    const cur = new Date(s);
+    while (cur <= e) {
+      const dow     = cur.getDay();
+      const yyyy    = cur.getFullYear();
+      const mm      = String(cur.getMonth() + 1).padStart(2, "0");
+      const dd      = String(cur.getDate()).padStart(2, "0");
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      if (dow !== 0 && dow !== 6 && !(Array.isArray(companyHolidays) && companyHolidays.includes(dateStr))) total++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return total;
+  }
+
   // ── Debounced validate ─────────────────────────────────────────────
   function debouncedValidate_() {
     clearTimeout(_validateTimer);
@@ -489,12 +508,17 @@
 
     if (needAttach) {
       section.classList.remove("hidden");
-      hint.classList.add("hidden");   // hint replaced by the actual upload zone
+      hint.classList.add("hidden");
     } else {
       section.classList.add("hidden");
       hint.classList.remove("hidden");
-      // Clear attachment if no longer needed
-      if (!needAttach && attachedFile) clearAttachment_();
+      // Never auto-clear attachment state here.
+      // clearAttachment_() is only called explicitly by user (× button)
+      // or when leave type changes away from Sick entirely.
+      if (type && type !== "Sick") {
+        // User switched away from Sick — safe to discard any pending file
+        if (attachedFile || attachedUrl) clearAttachment_();
+      }
     }
   }
 
@@ -749,8 +773,8 @@
     if (!reason)                        return alert("กรุณาระบุเหตุผล");
     if (!validateOnFly())               return alert("วันลาเกินโควตาที่กำหนด");
 
-    // Attachment check
-    let days = calcWorkingDays(startDate, endDate);
+    // Attachment check — compute fresh (bypass memo) to avoid stale holiday cache issue
+    let days = calcWorkingDaysFresh_(startDate, endDate);
     const dp = $('durationValue').value || "Full Day";
     if ((dp === "Morning" || dp === "Afternoon") && days > 0) days -= 0.5;
     const needAttach = (type === "Sick" && days >= SICK_ATTACH_MIN_DAYS);
