@@ -10,70 +10,26 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color: transparent; }
-    .card { background:#fff; border-radius: 1.25rem; border:1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 1.1rem; }
-
+    body { font-family:'Plus Jakarta Sans',sans-serif; background:#F3F4F6; color:#1F2937; -webkit-tap-highlight-color:transparent; }
+    .card { background:#fff; border-radius:1.25rem; border:1px solid #E5E7EB; box-shadow:0 4px 6px -1px rgba(0,0,0,.05); padding:1.1rem; }
     .input { background:#F9FAFB; border:1px solid #D1D5DB; border-radius:.9rem; padding:.85rem; width:100%; outline:none; transition:.2s; font-size:.95rem; color:#374151; }
     .input:focus { background:#fff; border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
-    .err { border-color:#EF4444 !important; background-color:#FEF2F2 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
-
+    .err { border-color:#EF4444!important; background-color:#FEF2F2!important; box-shadow:0 0 0 3px rgba(239,68,68,.15)!important; }
     .info-badge { font-size:11px; font-weight:700; background:#EFF6FF; color:#2563EB; padding:4px 12px; border-radius:9999px; border:1px solid #DBEAFE; display:inline-flex; align-items:center; white-space:nowrap; }
+    .btn-disabled { opacity:.55; cursor:not-allowed; }
+    ::-webkit-scrollbar { display:none; }
 
-    .btn-disabled { opacity: .55; cursor: not-allowed; }
-    ::-webkit-scrollbar { display: none; }
+    .dd-wrap { position:relative; }
+    .dd-panel { position:absolute; top:calc(100% + 8px); left:0; right:0; background:#fff; border:1px solid #E5E7EB; border-radius:1rem; box-shadow:0 10px 25px rgba(15,23,42,.12); overflow:hidden; z-index:50; max-height:280px; overflow-y:auto; }
+    .dd-item { padding:12px 14px; cursor:pointer; }
+    .dd-item:hover { background:#F9FAFB; }
+    .dd-empty { padding:14px; color:#9CA3AF; font-size:12px; text-align:center; }
 
-    .dd-wrap { position: relative; }
-    .dd-panel {
-      position: absolute;
-      top: calc(100% + 8px);
-      left: 0;
-      right: 0;
-      background: #fff;
-      border: 1px solid #E5E7EB;
-      border-radius: 1rem;
-      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
-      overflow: hidden;
-      z-index: 50;
-      max-height: 280px;
-      overflow-y: auto;
-    }
-    .dd-item { padding: 12px 14px; cursor: pointer; }
-    .dd-item:hover { background: #F9FAFB; }
-    .dd-empty { padding: 14px; color:#9CA3AF; font-size: 12px; text-align:center; }
-
-    .company-grid {
-      display:grid;
-      grid-template-columns: repeat(3, minmax(0,1fr));
-      gap: .75rem;
-    }
-    .company-card {
-      position: relative;
-      width: 100%;
-      text-align: center;
-      padding: 1rem .5rem;
-      border: 1px solid #D1D5DB;
-      border-radius: 1rem;
-      background: #F9FAFB;
-      color: #6B7280;
-      transition: .2s;
-      font-weight: 700;
-    }
-    .company-card:active { transform: scale(.98); }
-    .company-card.selected {
-      border-color: #3B82F6;
-      background: #EFF6FF;
-      color: #1D4ED8;
-      box-shadow: 0 4px 12px rgba(59,130,246,.15);
-    }
-    .company-card.selected::after {
-      content:'✓';
-      position:absolute;
-      top:8px;
-      right:10px;
-      font-size:12px;
-      color:#2563EB;
-      font-weight:bold;
-    }
+    .company-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
+    .company-card { position:relative; width:100%; text-align:center; padding:1rem .5rem; border:1px solid #D1D5DB; border-radius:1rem; background:#F9FAFB; color:#6B7280; transition:.2s; font-weight:700; }
+    .company-card:active { transform:scale(.98); }
+    .company-card.selected { border-color:#3B82F6; background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,.15); }
+    .company-card.selected::after { content:'✓'; position:absolute; top:8px; right:10px; font-size:12px; color:#2563EB; font-weight:bold; }
   </style>
 </head>
 
@@ -117,43 +73,37 @@
   const API_URL  = "https://script.google.com/macros/s/AKfycbxHUdtv3_rR84mci9crkOGR0IEZYpAt5LxOFrf5lqCQbgJ-JO45acJwivTEs0zQ9qyTcg/exec";
   const DEFAULT_RETURN = "index.html";
 
-  const BOOT_CACHE_KEY = "leave_boot_v3";
-  const BOOT_TTL_OK_MS = 3 * 60 * 1000;
+  // Separate cache key from index.html to avoid cross-contamination
+  const BOOT_CACHE_KEY     = "leave_boot_v3";
+  const BOOT_TTL_OK_MS     = 3 * 60 * 1000;
   const BOOT_TTL_NOT_OK_MS = 20 * 1000;
 
   const FALLBACK_COMPANY_OPTIONS = ["AVT", "ACR", "BDI"];
 
-  const $ = (id) => document.getElementById(id);
+  // Dropdown debounce
+  const DD_DEBOUNCE_MS = 150;
 
-  let userProfile = null;
-  let boot = null;
-  let approverOptions = [];
-  let companyOptions = FALLBACK_COMPANY_OPTIONS.slice();
+  const $ = id => document.getElementById(id);
+
+  let userProfile            = null;
+  let boot                   = null;
+  let approverOptions        = [];
+  let companyOptions         = FALLBACK_COMPANY_OPTIONS.slice();
   let selectedApproverUserId = "";
-  let selectedCompany = "";
+  let selectedCompany        = "";
+  let _ddTimer               = null;  // dropdown debounce timer
 
-  function showLoader(msg){
-    $("loaderText").textContent = msg || "Processing...";
-    $("loader").classList.remove("hidden");
-    $("loader").classList.add("flex");
-  }
+  // ── Loader ─────────────────────────────────────────────────────────
+  function showLoader(msg) { $("loaderText").textContent = msg||"Processing..."; $("loader").classList.remove("hidden"); $("loader").classList.add("flex"); }
+  function hideLoader()    { $("loader").classList.add("hidden"); $("loader").classList.remove("flex"); }
 
-  function hideLoader(){
-    $("loader").classList.add("hidden");
-    $("loader").classList.remove("flex");
-  }
-
-  function doneAndExit(){
-    try {
-      if (window.liff && liff.isInClient()) { liff.closeWindow(); return; }
-    } catch(e) {}
+  function doneAndExit() {
+    try { if (window.liff && liff.isInClient()) { liff.closeWindow(); return; } } catch(e) {}
     try { window.close(); } catch(e) {}
   }
 
   function escapeHtml_(s) {
-    return String(s ?? "")
-      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+    return String(s??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   }
 
   function setHeader_(title, subtitle) {
@@ -163,59 +113,48 @@
 
   function setStatusBadge_(text) {
     const b = $("statusBadge");
-    if (!text) {
-      b.classList.add("hidden");
-      return;
-    }
+    if (!text) { b.classList.add("hidden"); return; }
     b.textContent = text;
     b.classList.remove("hidden");
   }
 
   function getReturnUrl_() {
     const params = new URLSearchParams(location.search);
-    const ret = params.get("return");
+    const ret    = params.get("return");
     return ret ? decodeURIComponent(ret) : DEFAULT_RETURN;
   }
 
-  function goReturn_() {
-    location.replace(getReturnUrl_());
-  }
+  function goReturn_() { location.replace(getReturnUrl_()); }
 
-  function readBootCache_(userId){
-    try{
+  // ── Boot cache ─────────────────────────────────────────────────────
+  function readBootCache_(userId) {
+    try {
       const raw = localStorage.getItem(BOOT_CACHE_KEY);
-      if(!raw) return null;
+      if (!raw) return null;
       const obj = JSON.parse(raw);
-      if(!obj || obj.userId !== userId) return null;
-
+      if (!obj || obj.userId !== userId) return null;
       const ttl = obj.onboarded ? BOOT_TTL_OK_MS : BOOT_TTL_NOT_OK_MS;
-      if(Date.now() - (obj.ts || 0) > ttl) return null;
-
+      if (Date.now() - (obj.ts||0) > ttl) return null;
       return obj.payload;
-    }catch(e){
-      return null;
-    }
+    } catch(e) { return null; }
   }
 
-  function writeBootCache_(userId, payload){
-    try{
+  function writeBootCache_(userId, payload) {
+    try {
       localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({
-        userId,
-        ts: Date.now(),
-        onboarded: !!payload?.onboarded,
-        payload
+        userId, ts: Date.now(), onboarded: !!payload?.onboarded, payload
       }));
-    }catch(e){}
+    } catch(e) {}
   }
 
-  async function apiBootstrap_(userId){
+  async function apiBootstrap_(userId) {
     const res = await fetch(API_URL + "?action=bootstrap&userId=" + encodeURIComponent(userId) + "&t=" + Date.now());
     return res.json();
   }
 
   async function postFormUrlEncoded_(obj) {
     const body = new URLSearchParams();
-    Object.keys(obj || {}).forEach(k => body.set(k, obj[k] == null ? "" : String(obj[k])));
+    Object.keys(obj||{}).forEach(k => body.set(k, obj[k]==null ? "" : String(obj[k])));
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
@@ -224,52 +163,34 @@
     return res.json();
   }
 
+  // ── Approver option helpers ────────────────────────────────────────
   function buildOptionLabel_(x) {
     if (!x) return "-";
-    const fn = String(x.fullName || "").trim();
-    const nn = String(x.nickname || "").trim();
-    const dn = String(x.displayName || "").trim();
-    const co = String(x.company || "").trim();
-
-    let label = "-";
-    if (fn && nn) label = `${fn} (${nn})`;
-    else if (fn) label = fn;
-    else if (nn) label = nn;
-    else label = dn || "-";
-
+    const fn = String(x.fullName||"").trim();
+    const nn = String(x.nickname||"").trim();
+    const dn = String(x.displayName||"").trim();
+    const co = String(x.company||"").trim();
+    let label = fn && nn ? `${fn} (${nn})` : fn || nn || dn || "-";
     return co ? `${label} • ${co}` : label;
   }
 
-  function normalizeStr_(s) {
-    return String(s || "").toLowerCase().trim();
-  }
+  function normalizeStr_(s) { return String(s||"").toLowerCase().trim(); }
 
   function matchesQuery_(opt, q) {
-    const qq = normalizeStr_(q);
-    if (!qq) return true;
-
-    const fields = [
-      opt.fullName,
-      opt.nickname,
-      opt.displayName,
-      opt.label,
-      opt.company
-    ].map(normalizeStr_);
-
+    if (!q) return true;
+    const qq     = normalizeStr_(q);
+    const fields = [opt.fullName, opt.nickname, opt.displayName, opt.label, opt.company].map(normalizeStr_);
     return fields.some(v => v.includes(qq));
   }
 
-  function existingEmployee_() {
-    return boot?.employee && String(boot.employee.userId || "").trim() ? boot.employee : null;
+  function filteredApprovers_(q) {
+    return (approverOptions||[]).filter(o => o && o.userId && matchesQuery_(o, q));
   }
 
-  function existingApproverUserId_() {
-    return String(boot?.employee?.approverUserId || "").trim();
-  }
-
-  function existingCompany_() {
-    return String(boot?.employee?.company || "").trim();
-  }
+  // ── Existing employee helpers ──────────────────────────────────────
+  function existingEmployee_()        { return boot?.employee && String(boot.employee.userId||"").trim() ? boot.employee : null; }
+  function existingApproverUserId_()  { return String(boot?.employee?.approverUserId||"").trim(); }
+  function existingCompany_()         { return String(boot?.employee?.company||"").trim(); }
 
   function setBtnDisabled_(disabled) {
     const btn = $("submitBtn");
@@ -278,91 +199,60 @@
   }
 
   function clearErr_(id, inputId) {
-    const el = $(id);
-    const inp = $(inputId);
-    if (el) el.classList.add("hidden");
-    if (inp) inp.classList.remove("err");
+    $(id)?.classList.add("hidden");
+    $(inputId)?.classList.remove("err");
   }
 
   function showErr_(id, inputId, msg) {
-    const el = $(id);
+    const el  = $(id);
     const inp = $(inputId);
-    if (el) {
-      el.textContent = msg;
-      el.classList.remove("hidden");
-    }
+    if (el)  { el.textContent = msg; el.classList.remove("hidden"); }
     if (inp) inp.classList.add("err");
   }
 
-  function renderSystemError_(msg) {
-    setHeader_("System Error", "Please try again");
-    setStatusBadge_("");
-    $("rootBox").innerHTML = `
-      <div class="card text-center py-10">
-        <div class="text-4xl mb-3">⚠️</div>
-        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
-        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg || "ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
-        <button class="w-full mt-6 bg-[#60A5FA] hover:bg-[#3B82F6] shadow-lg shadow-blue-200 text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
-        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold hover:bg-[#F9FAFB] transition-colors active:scale-[0.98]" onclick="doneAndExit()">Close</button>
-      </div>
-    `;
-    $("bottomBar").classList.add("hidden");
-  }
-
+  // ── Company cards ──────────────────────────────────────────────────
   function renderCompanyCards_(selected) {
     return companyOptions.map(c => {
-      const isSelected = String(c) === String(selected);
-      return `
-        <button type="button"
-          class="company-card ${isSelected ? "selected" : ""}"
-          data-company="${escapeHtml_(c)}"
-          onclick="selectCompany('${escapeHtml_(c)}', this)">
-          ${escapeHtml_(c)}
-        </button>
-      `;
+      const isSel = String(c) === String(selected);
+      return `<button type="button" class="company-card ${isSel?"selected":""}" data-company="${escapeHtml_(c)}" onclick="selectCompany('${escapeHtml_(c)}',this)">${escapeHtml_(c)}</button>`;
     }).join("");
   }
 
   function selectCompany(company, btn) {
-    selectedCompany = String(company || "").trim();
-    const hidden = $("company");
+    selectedCompany = String(company||"").trim();
+    const hidden    = $("company");
     if (hidden) hidden.value = selectedCompany;
-
     document.querySelectorAll(".company-card").forEach(el => el.classList.remove("selected"));
     if (btn) btn.classList.add("selected");
-
-    clearErr_("companyErr", "companyBox");
+    clearErr_("companyErr","companyBox");
   }
 
+  // ── Render form ────────────────────────────────────────────────────
   function renderForm_() {
-    const emp = existingEmployee_();
+    const emp             = existingEmployee_();
     const existingApprover = existingApproverUserId_();
-    const existingCompany = existingCompany_();
+    const existingCompany  = existingCompany_();
 
     selectedApproverUserId = existingApprover;
-    selectedCompany = existingCompany;
+    selectedCompany        = existingCompany;
 
-    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName || "there")}</span>`);
+    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile?.displayName||"there")}</span>`);
     setStatusBadge_(emp ? "Profile" : "New");
 
     $("rootBox").innerHTML = `
       <div class="card space-y-4">
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Full Name <span class="text-[#EF4444]">*</span></label>
-          <input id="fullName" type="text" class="input" placeholder="กรอกชื่อ - นามสกุล" value="${escapeHtml_(emp?.fullName || "")}" />
+          <input id="fullName" type="text" class="input" placeholder="กรอกชื่อ - นามสกุล" value="${escapeHtml_(emp?.fullName||"")}" />
           <div id="nameErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold"></div>
         </div>
-
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Nickname</label>
-          <input id="nickname" type="text" class="input" placeholder="กรอกชื่อเล่น" value="${escapeHtml_(emp?.nickname || "")}" />
+          <input id="nickname" type="text" class="input" placeholder="กรอกชื่อเล่น" value="${escapeHtml_(emp?.nickname||"")}" />
         </div>
-
         <div>
           <label class="text-sm font-bold text-[#1F2937] block mb-2">Company <span class="text-[#EF4444]">*</span></label>
-          <div id="companyBox" class="company-grid">
-            ${renderCompanyCards_(existingCompany)}
-          </div>
+          <div id="companyBox" class="company-grid">${renderCompanyCards_(existingCompany)}</div>
           <input type="hidden" id="company" value="${escapeHtml_(existingCompany)}" />
           <div id="companyErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold"></div>
         </div>
@@ -372,23 +262,19 @@
         <div class="flex justify-between items-center px-1 h-7">
           <label class="text-sm font-bold text-[#1F2937]">Approver <span class="text-[#EF4444]">*</span></label>
         </div>
-
         <div class="dd-wrap">
           <input id="approverSearch" type="text" class="input" placeholder="ค้นหาผู้อนุมัติ" autocomplete="off" />
           <input id="approverUserId" type="hidden" value="${escapeHtml_(selectedApproverUserId)}" />
-
           <div id="ddPanel" class="dd-panel hidden"></div>
           <div id="approverErr" class="hidden text-xs text-[#EF4444] mt-2 font-bold px-1"></div>
         </div>
-
         <div class="flex items-start gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9]">
           <span class="text-[#3B82F6] mt-0.5">ℹ️</span>
           <div class="text-[11px] text-[#64748B] font-medium leading-relaxed">
             Approver is locked after registration. Contact an admin if you need to change it.
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
 
     $("bottomBar").classList.remove("hidden");
     $("submitBtn").textContent = "บันทึกข้อมูล";
@@ -396,60 +282,38 @@
 
     wireDropdown_();
     hydrateApproverInput_();
-
-    $("fullName").addEventListener("input", () => clearErr_("nameErr", "fullName"));
+    $("fullName").addEventListener("input", () => clearErr_("nameErr","fullName"));
   }
 
-  function filteredApprovers_(q) {
-    return (approverOptions || []).filter(o => {
-      if (!o || !o.userId) return false;
-      return matchesQuery_(o, q);
-    });
-  }
-
+  // ── Dropdown (with debounce) ───────────────────────────────────────
   function hydrateApproverInput_() {
     const hidden = $("approverUserId");
     const search = $("approverSearch");
-    const uid = String(hidden?.value || "").trim();
-    if (!uid) {
-      search.value = "";
-      return;
-    }
-
-    const opt = (approverOptions || []).find(x => String(x.userId) === uid);
-    search.value = opt ? (opt.label || buildOptionLabel_(opt)) : "";
+    const uid    = String(hidden?.value||"").trim();
+    if (!uid) { search.value = ""; return; }
+    const opt    = (approverOptions||[]).find(x => String(x.userId) === uid);
+    search.value = opt ? (opt.label||buildOptionLabel_(opt)) : "";
   }
 
   function renderDropdown_(q) {
     const panel = $("ddPanel");
     if (!panel) return;
-
-    const list = filteredApprovers_(q);
-    if (!list.length) {
-      panel.innerHTML = `<div class="dd-empty">No approver found</div>`;
-      return;
-    }
-
+    const list  = filteredApprovers_(q);
+    if (!list.length) { panel.innerHTML = `<div class="dd-empty">No approver found</div>`; return; }
     panel.innerHTML = list.map(o => {
-      const label = escapeHtml_(o.label || buildOptionLabel_(o));
-      const uid = escapeHtml_(o.userId);
+      const label = escapeHtml_(o.label||buildOptionLabel_(o));
+      const uid   = escapeHtml_(o.userId);
       return `<div class="dd-item" data-uid="${uid}">${label}</div>`;
     }).join("");
   }
 
-  function openDropdown_() {
-    $("ddPanel")?.classList.remove("hidden");
-  }
-
-  function closeDropdown_() {
-    $("ddPanel")?.classList.add("hidden");
-  }
+  function openDropdown_()  { $("ddPanel")?.classList.remove("hidden"); }
+  function closeDropdown_() { $("ddPanel")?.classList.add("hidden"); }
 
   function wireDropdown_() {
-    const input = $("approverSearch");
-    const panel = $("ddPanel");
+    const input  = $("approverSearch");
+    const panel  = $("ddPanel");
     const hidden = $("approverUserId");
-
     if (!input || !panel || !hidden) return;
 
     input.addEventListener("focus", function() {
@@ -458,217 +322,207 @@
     });
 
     input.addEventListener("input", function() {
-      clearErr_("approverErr", "approverSearch");
-      hidden.value = "";
+      clearErr_("approverErr","approverSearch");
+      hidden.value          = "";
       selectedApproverUserId = "";
-      renderDropdown_(input.value);
-      openDropdown_();
+
+      // Debounced filter — avoids re-filtering on every keystroke
+      clearTimeout(_ddTimer);
+      _ddTimer = setTimeout(() => {
+        renderDropdown_(input.value);
+        openDropdown_();
+      }, DD_DEBOUNCE_MS);
     });
 
     panel.addEventListener("click", function(ev) {
       const item = ev.target?.closest?.(".dd-item");
       if (!item) return;
-
-      const uid = String(item.getAttribute("data-uid") || "");
+      const uid  = String(item.getAttribute("data-uid")||"");
       if (!uid) return;
 
       selectedApproverUserId = uid;
-      hidden.value = uid;
-
-      const opt = (approverOptions || []).find(x => String(x.userId) === uid);
-      input.value = opt ? (opt.label || buildOptionLabel_(opt)) : "";
+      hidden.value           = uid;
+      const opt              = (approverOptions||[]).find(x => String(x.userId) === uid);
+      input.value            = opt ? (opt.label||buildOptionLabel_(opt)) : "";
 
       closeDropdown_();
-      clearErr_("approverErr", "approverSearch");
+      clearErr_("approverErr","approverSearch");
     });
 
     document.addEventListener("click", function(ev) {
-      const wrap = ev.target?.closest?.(".dd-wrap");
-      if (!wrap) closeDropdown_();
+      if (!ev.target?.closest?.(".dd-wrap")) closeDropdown_();
     });
   }
 
-  function validateBeforeSubmit_() {
-    const fullName = ($("fullName")?.value || "").trim();
-    const company = ($("company")?.value || "").trim();
-    const approverUserId = String($("approverUserId")?.value || "").trim();
+  /**
+   * updateApproverOptions_
+   * Updates approver list in-place without re-rendering the whole form.
+   * Called when fresh boot arrives after cache render.
+   */
+  function updateApproverOptions_(newOptions) {
+    approverOptions = newOptions;
+    // Re-hydrate display name (in case it changed)
+    hydrateApproverInput_();
+    // If dropdown is open, refresh it
+    const panel = $("ddPanel");
+    if (panel && !panel.classList.contains("hidden")) {
+      renderDropdown_($("approverSearch")?.value || "");
+    }
+  }
 
+  // ── Validate before submit ─────────────────────────────────────────
+  function validateBeforeSubmit_() {
+    const fullName        = ($("fullName")?.value||"").trim();
+    const company         = ($("company")?.value||"").trim();
+    const approverUserIdV = String($("approverUserId")?.value||"").trim();
     let ok = true;
 
-    if (!fullName) {
-      showErr_("nameErr", "fullName", "Please enter your full name.");
-      ok = false;
-    }
-
-    if (!company) {
-      showErr_("companyErr", "companyBox", "Please select your company.");
-      ok = false;
-    }
-
-    if (!approverUserId) {
-      showErr_("approverErr", "approverSearch", "Approver is required to complete registration.");
-      ok = false;
-    }
+    if (!fullName) { showErr_("nameErr","fullName","Please enter your full name."); ok = false; }
+    if (!company)  { showErr_("companyErr","companyBox","Please select your company."); ok = false; }
+    if (!approverUserIdV) { showErr_("approverErr","approverSearch","Approver is required to complete registration."); ok = false; }
 
     return ok;
   }
 
+  // ── Submit ─────────────────────────────────────────────────────────
   async function handleSubmit() {
     try {
       if (!validateBeforeSubmit_()) return;
 
-      const fullName = ($("fullName")?.value || "").trim();
-      const nickname = ($("nickname")?.value || "").trim();
-      const company = ($("company")?.value || "").trim();
-      const approverUserId = String($("approverUserId")?.value || "").trim();
+      const fullName        = ($("fullName")?.value||"").trim();
+      const nickname        = ($("nickname")?.value||"").trim();
+      const company         = ($("company")?.value||"").trim();
+      const approverUserIdV = String($("approverUserId")?.value||"").trim();
 
       showLoader("Saving...");
       setBtnDisabled_(true);
 
       const data = await postFormUrlEncoded_({
-        action: "register_user",
-        userId: userProfile.userId,
-        displayName: userProfile.displayName || "",
+        action:          "register_user",
+        userId:          userProfile.userId,
+        displayName:     userProfile.displayName||"",
         fullName,
         nickname,
         company,
-        approverUserId
+        approverUserId:  approverUserIdV
       });
 
       if (!data || !data.ok) {
         hideLoader();
         setBtnDisabled_(false);
-
-        const errCode = String(data?.error || "unknown_error");
-
-        if (errCode === "missing_fullName") {
-          showErr_("nameErr", "fullName", "Please enter your full name.");
-          return;
-        }
-
-        if (errCode === "missing_company" || errCode === "invalid_company") {
-          showErr_("companyErr", "companyBox", "Please select a valid company.");
-          return;
-        }
-
-        if (errCode === "missing_approverUserId") {
-          showErr_("approverErr", "approverSearch", "Approver is required to complete registration.");
-          return;
-        }
-
-        if (errCode === "approver_not_found") {
-          showErr_("approverErr", "approverSearch", "Selected approver was not found. Please select again.");
-          return;
-        }
-
-        if (errCode === "approver_inactive") {
-          showErr_("approverErr", "approverSearch", "Selected approver is inactive. Please choose another.");
-          return;
-        }
-
+        const errCode = String(data?.error||"unknown_error");
+        if (errCode === "missing_fullName")                      { showErr_("nameErr","fullName","Please enter your full name."); return; }
+        if (errCode === "missing_company" || errCode === "invalid_company") { showErr_("companyErr","companyBox","Please select a valid company."); return; }
+        if (errCode === "missing_approverUserId")                { showErr_("approverErr","approverSearch","Approver is required to complete registration."); return; }
+        if (errCode === "approver_not_found")                    { showErr_("approverErr","approverSearch","Selected approver was not found. Please select again."); return; }
+        if (errCode === "approver_inactive")                     { showErr_("approverErr","approverSearch","Selected approver is inactive. Please choose another."); return; }
         alert("❌ Save failed: " + errCode);
         return;
       }
 
       writeBootCache_(userProfile.userId, {
         ok: true,
-        onboarded: !!data.onboarded,
-        employee: data.employee || null,
-        approverOptions: approverOptions || [],
-        companyOptions: companyOptions || []
+        onboarded:       !!data.onboarded,
+        employee:        data.employee||null,
+        approverOptions: approverOptions||[],
+        companyOptions:  companyOptions||[]
       });
 
       hideLoader();
       $("bottomBar").classList.add("hidden");
-
       $("rootBox").innerHTML = `
         <div class="card text-center py-12 mt-8 border border-[#10B981] shadow-lg shadow-green-100">
           <div class="w-20 h-20 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[#10B981] text-4xl mx-auto mb-4 animate-bounce">✅</div>
           <div class="text-xl font-bold text-[#1F2937]">Registration complete.</div>
-        </div>
-      `;
+        </div>`;
 
       setTimeout(() => {
-        try {
-          if (window.liff && liff.isInClient()) { liff.closeWindow(); return; }
-        } catch(e) {}
+        try { if (window.liff && liff.isInClient()) { liff.closeWindow(); return; } } catch(e) {}
         goReturn_();
       }, 700);
 
     } catch (e) {
       hideLoader();
       setBtnDisabled_(false);
-      alert("❌ Save failed: " + (e?.message || e));
+      alert("❌ Save failed: " + (e?.message||e));
     }
   }
 
+  // ── Init ───────────────────────────────────────────────────────────
   async function init() {
     showLoader("Loading...");
     await liff.init({ liffId: LIFF_ID });
-
-    if (!liff.isLoggedIn()) {
-      liff.login();
-      return;
-    }
+    if (!liff.isLoggedIn()) { liff.login(); return; }
 
     userProfile = await liff.getProfile();
-
-    if (userProfile.pictureUrl) {
-      $("profileImg").src = userProfile.pictureUrl;
-      $("avatarBox").classList.remove("hidden");
-    }
-
-    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName || "")}</span>`);
+    if (userProfile.pictureUrl) { $("profileImg").src = userProfile.pictureUrl; $("avatarBox").classList.remove("hidden"); }
+    setHeader_("Welcome 👋", `Hi, <span class="font-bold text-[#1F2937]">${escapeHtml_(userProfile.displayName||"")}</span>`);
     setStatusBadge_("Loading");
 
+    // Try cache first
     const cachedBoot = readBootCache_(userProfile.userId);
     if (cachedBoot && cachedBoot.ok) {
-      boot = cachedBoot;
-      approverOptions = Array.isArray(boot.approverOptions) ? boot.approverOptions.map(x => ({
-        ...x,
-        label: x.label || buildOptionLabel_(x)
-      })) : [];
-      companyOptions = Array.isArray(boot.companyOptions) && boot.companyOptions.length
-        ? boot.companyOptions
-        : FALLBACK_COMPANY_OPTIONS.slice();
+      boot            = cachedBoot;
+      approverOptions = Array.isArray(boot.approverOptions)
+        ? boot.approverOptions.map(x => ({ ...x, label: x.label||buildOptionLabel_(x) }))
+        : [];
+      companyOptions  = Array.isArray(boot.companyOptions) && boot.companyOptions.length
+        ? boot.companyOptions : FALLBACK_COMPANY_OPTIONS.slice();
 
       renderForm_();
       hideLoader();
     }
 
+    // Always fetch fresh
     try {
       const fresh = await apiBootstrap_(userProfile.userId);
-      if (!fresh || !fresh.ok) throw new Error(String(fresh?.error || "bootstrap_failed"));
+      if (!fresh || !fresh.ok) throw new Error(String(fresh?.error||"bootstrap_failed"));
 
       boot = fresh;
-      approverOptions = Array.isArray(boot.approverOptions) ? boot.approverOptions.map(x => ({
-        ...x,
-        label: x.label || buildOptionLabel_(x)
-      })) : [];
+      const newApproverOptions = Array.isArray(boot.approverOptions)
+        ? boot.approverOptions.map(x => ({ ...x, label: x.label||buildOptionLabel_(x) }))
+        : [];
       companyOptions = Array.isArray(boot.companyOptions) && boot.companyOptions.length
-        ? boot.companyOptions
-        : FALLBACK_COMPANY_OPTIONS.slice();
+        ? boot.companyOptions : FALLBACK_COMPANY_OPTIONS.slice();
 
-      writeBootCache_(userProfile.userId, {
-        ...boot,
-        companyOptions,
-        approverOptions
-      });
+      writeBootCache_(userProfile.userId, { ...boot, companyOptions, approverOptions: newApproverOptions });
 
-      renderForm_();
-      hideLoader();
-    } catch (e) {
+      if (cachedBoot) {
+        // Form already rendered — partial update: refresh approver list without full re-render
+        updateApproverOptions_(newApproverOptions);
+        // Refresh company cards if options changed
+        const cBox = $("companyBox");
+        if (cBox) cBox.innerHTML = renderCompanyCards_(existingCompany_());
+      } else {
+        approverOptions = newApproverOptions;
+        renderForm_();
+        hideLoader();
+      }
+    } catch(e) {
       hideLoader();
       if (!boot) renderSystemError_("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง");
     }
   }
 
+  function renderSystemError_(msg) {
+    setHeader_("System Error","Please try again");
+    setStatusBadge_("");
+    $("rootBox").innerHTML = `
+      <div class="card text-center py-10">
+        <div class="text-4xl mb-3">⚠️</div>
+        <div class="text-lg font-bold text-[#1F2937]">System Error</div>
+        <div class="text-sm text-[#9CA3AF] mt-2">${escapeHtml_(msg||"ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่อีกครั้ง")}</div>
+        <button class="w-full mt-6 bg-[#60A5FA] text-white py-3.5 rounded-2xl font-bold active:scale-[0.98] transition-all" onclick="location.reload()">Try Again</button>
+        <button class="w-full mt-3 bg-white border border-[#E5E7EB] text-[#9CA3AF] py-3 rounded-2xl font-bold" onclick="doneAndExit()">Close</button>
+      </div>`;
+    $("bottomBar").classList.add("hidden");
+  }
+
   init().catch(err => {
     console.error(err);
     hideLoader();
-    renderSystemError_("LIFF Init Error: " + (err?.message || err));
+    renderSystemError_("LIFF Init Error: " + (err?.message||err));
   });
 </script>
 </body>
 </html>
-
